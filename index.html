@@ -2,7 +2,6 @@
 <html lang="ar" dir="rtl">
 <head>
   <meta charset="UTF-8">
-  <!-- قفل ميزة التكبير والتصغير لمنح تجربة تطبيق متكاملة للهواتف -->
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <meta name="theme-color" content="#4f46e5" />
   <title>نظام إدارة العمليات اللوجستية</title>
@@ -10,27 +9,30 @@
   <link rel="manifest" href="manifest.json">
   <link rel="apple-touch-icon" href="https://placehold.co/192x192/4f46e5/ffffff?text=Cargo">
   
-  <!-- تحميل ملف أنماط الخرائط أولاً لضمان عدم حدوث تشتت لرموز المواقع -->
+  <!-- مكتبة أنماط الخرائط Leaflet -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+  
+  <!-- مكتبة Toastify CSS لإشعارات الهواتف الداخلية الجذابة -->
+  <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css">
   
   <!-- Tailwind CSS للواجهة -->
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- Alpine.js لإدارة الحالة -->
   <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
   <!-- FontAwesome للأيقونات -->
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"></link>
   
-  <!-- مكتبة Leaflet البرمجية للخرائط -->
+  <!-- مكتبة Leaflet للخرائط -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <!-- مكتبة Toastify JS للإشعارات -->
+  <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
 
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700&display=swap');
     body {
       font-family: 'Cairo', sans-serif;
-      /* منع التمرير المرن والإيماءات المزعجة على المتصفحات */
       touch-action: pan-x pan-y;
     }
-    /* ضمان أن أيقونات الخريطة المخصصة تنسجم مع منطق التوجيه الجغرافي للمكتبة */
     .custom-div-icon {
       background: transparent !important;
       border: none !important;
@@ -40,24 +42,11 @@
 </head>
 <body class="bg-slate-50 text-slate-800" x-data="logisticsApp()">
 
-  <!-- حاوية الإشعارات العائمة داخل التطبيق (Toast Alerts) -->
-  <div class="fixed top-4 left-4 z-[9999] space-y-2 pointer-events-none max-w-sm w-full px-4">
-    <template x-for="toast in toasts" :key="toast.id">
-      <div class="pointer-events-auto bg-slate-900 text-white px-4 py-3 rounded-xl shadow-2xl flex items-center space-x-3 space-x-reverse border transition duration-300 transform translate-x-0"
-           :class="toast.type === 'error' ? 'border-rose-500' : 'border-indigo-500'">
-        <div class="p-1.5 rounded-lg" :class="toast.type === 'error' ? 'bg-rose-500/10 text-rose-400' : 'bg-indigo-500/10 text-indigo-400'">
-          <i class="fa-solid text-sm" :class="toast.type === 'error' ? 'fa-triangle-exclamation' : 'fa-bell'"></i>
-        </div>
-        <span class="text-xs font-semibold flex-1" x-text="toast.message"></span>
-      </div>
-    </template>
-  </div>
-
   <!-- شاشة حجب التحميل لمنع الضغط المزدوج والعمليات المتكررة -->
   <div x-show="loading" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-[99999]" x-cloak>
-    <div class="bg-white px-6 py-4 rounded-2xl shadow-2xl flex items-center space-x-3 space-x-reverse border border-slate-100 animate-bounce">
+    <div class="bg-white px-6 py-4 rounded-2xl shadow-2xl flex items-center space-x-3 space-x-reverse border border-slate-100">
       <i class="fa-solid fa-spinner animate-spin text-2xl text-indigo-600"></i>
-      <span class="font-bold text-slate-700 text-sm">الرجاء الانتظار...</span>
+      <span class="font-bold text-slate-700 text-sm">جاري تنفيذ الإجراء...</span>
     </div>
   </div>
 
@@ -68,7 +57,7 @@
         <div class="inline-flex p-3 bg-indigo-50 rounded-full text-indigo-600 mb-3">
           <i class="fa-solid fa-truck-fast text-4xl"></i>
         </div>
-        <h2 class="text-2xl font-bold text-slate-900">HAJIB SOFT</h2>
+        <h2 class="text-2xl font-bold text-slate-900">بوابة الخدمات اللوجستية</h2>
         <p class="text-slate-500 text-sm mt-1">يرجى تسجيل الدخول للوصول إلى لوحة التحكم</p>
       </div>
 
@@ -104,7 +93,7 @@
   <!-- الهيكل الرئيسي للتطبيق بعد تسجيل الدخول -->
   <div x-show="isLoggedIn" class="min-h-screen flex flex-col md:flex-row pb-24 md:pb-0" x-cloak>
     
-    <!-- شريط علوي مبسط للهواتف الذكية -->
+    <!-- شريط علوي للهواتف الذكية -->
     <header class="flex md:hidden justify-between items-center bg-slate-900 text-white px-5 py-4 sticky top-0 z-[1001] shadow-md">
       <div class="flex items-center space-x-2 space-x-reverse">
         <i class="fa-solid fa-truck-fast text-indigo-400 text-xl"></i>
@@ -442,7 +431,7 @@
                 <tr>
                   <th class="p-4">اسم المندوب</th>
                   <th class="p-4">الجوال والبريد</th>
-                  <th class="p-4">النطاق الجغرافي</th>
+                  <th class="p-4">النطاف الجغرافي</th>
                   <th class="p-4">إحصائيات الطلبات</th>
                   <th class="p-4">رسوم مستحقة</th>
                   <th class="p-4">الحالة</th>
@@ -849,6 +838,15 @@
   </div>
 
   <script>
+    // تسجيل الـ Service Worker لتفعيل الـ PWA
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('sw.js')
+          .then(reg => console.log('تم تسجيل Service Worker بنجاح', reg))
+          .catch(err => console.error('فشل تسجيل Service Worker', err));
+      });
+    }
+
     // ==========================================
     // تهيئة المتغيرات الأساسية وعناوين الخوادم
     // ==========================================
@@ -920,13 +918,22 @@
           }, 12000);
         },
 
-        // إشعار فوري وتنبيه مرئي
+        // إشعار فوري وتنبيه مرئي باستخدام مكتبة Toastify المتكاملة للهواتف
         showToast(message, type = 'success') {
-          const id = Date.now();
-          this.toasts.push({ id, message, type });
-          setTimeout(() => {
-            this.toasts = this.toasts.filter(t => t.id !== id);
-          }, 4000);
+          Toastify({
+            text: message,
+            duration: 4000,
+            close: true,
+            gravity: "top",
+            position: "left",
+            stopOnFocus: true,
+            style: {
+              background: type === 'error' ? "linear-gradient(to right, #f43f5e, #e11d48)" : "linear-gradient(to right, #4f46e5, #4338ca)",
+              fontFamily: "Cairo, sans-serif",
+              borderRadius: "12px",
+              direction: "rtl"
+            }
+          }).showToast();
         },
 
         // طلب صلاحيات الإشعارات من المتصفح لضمان تفعيلها
@@ -946,13 +953,18 @@
           audio.play().catch(() => console.log('تعذر تشغيل الصوت تلقائياً بسبب سياسة الأمان بالمتصفح'));
         },
 
-        // إرسال تنبيه للنظام (Push style notification)
+        // إرسال تنبيه للنظام (PWA System Push Notification) عبر الـ Service Worker
         triggerSystemNotification(title, body) {
           if ("Notification" in window && Notification.permission === "granted") {
-            new Notification(title, {
-              body: body,
-              icon: 'https://placehold.co/192x192/4f46e5/ffffff?text=Cargo'
-            });
+            if (navigator.serviceWorker) {
+              navigator.serviceWorker.ready.then(registration => {
+                registration.showNotification(title, {
+                  body: body,
+                  icon: 'https://placehold.co/192x192/4f46e5/ffffff?text=Cargo',
+                  vibrate: [200, 100, 200]
+                });
+              });
+            }
           }
         },
 
@@ -962,10 +974,8 @@
           if (!silent) this.loading = true;
           
           try {
-            // جلب الطلبات
             const ordersRes = await this.apiCall({ action: 'getOrders' });
             if (ordersRes.success) {
-              // مراقبة الطلبات الجديدة للتنبيه الفوري بالصوت والرسائل
               if (silent && this.orders.length > 0 && ordersRes.orders.length > this.orders.length) {
                 const diff = ordersRes.orders.length - this.orders.length;
                 this.showToast(`ورد ${diff} طلب نقل جديد في المنصة!`, 'info');
@@ -973,7 +983,6 @@
                 this.triggerSystemNotification("شحنات جديدة", `هناك شحنات جديدة بانتظار التوزيع والقبول.`);
               }
               
-              // مراقبة طلبات تعذر التسليم الجديدة للمدير للتنبيه المباشر
               if (silent && this.userRole === 'Manager') {
                 const oldPendingCount = this.getPendingCancellationOrders().length;
                 const newPending = ordersRes.orders.filter(o => o.Status === 'Pending Cancellation');
@@ -987,24 +996,19 @@
               this.orders = ordersRes.orders;
             }
 
-            // جلب المناديب والتقارير
             const driversRes = await this.apiCall({ action: 'getDrivers' });
             if (driversRes.success) this.drivers = driversRes.drivers;
 
-            // جلب الإحصائيات الشاملة للوحة الإدارة
             const statsRes = await this.apiCall({ action: 'getDashboardStats' });
             if (statsRes.success) this.stats = statsRes.stats;
 
-            // جلب السياسة والإعدادات
             const settingsRes = await this.apiCall({ action: 'getSettings' });
             if (settingsRes.success) this.settings.commission = settingsRes.commission;
 
-            // تحديث الطلب الحالي للمندوب إن وجد
             if (this.userRole === 'Driver') {
               this.currentDriverOrder = this.orders.find(o => o.AssignedDriverID.toString() === this.driverId.toString() && o.Status === 'In Transit') || null;
             }
 
-            // إعادة رسم الخريطة ومواقع المناديب تلقائياً في الخلفية
             this.updateMaps();
 
           } catch (e) {
@@ -1181,7 +1185,7 @@
           setTimeout(() => { this.managerMap.invalidateSize(); }, 150);
         },
 
-        // تفعيل تتبع الموقع الجغرافي للمندوب دورياً
+        // تتبع الموقع الجغرافي للمندوب
         startDriverTracking() {
           if (navigator.geolocation) {
             this.locationWatchId = navigator.geolocation.watchPosition(
@@ -1199,27 +1203,6 @@
               { enableHighAccuracy: true, timeout: 15000, maximumAge: 10000 }
             );
           }
-        },
-
-        // معالجة الأرقام للاتصال وواتساب للرقم السعودي
-        formatPhoneForCall(phone) {
-          if (!phone) return '#';
-          let cleaned = phone.toString().replace(/\D/g, '');
-          if (cleaned.startsWith('5')) {
-            cleaned = '0' + cleaned;
-          }
-          return 'tel:' + cleaned;
-        },
-
-        formatPhoneForWhatsApp(phone) {
-          if (!phone) return '#';
-          let cleaned = phone.toString().replace(/\D/g, '');
-          if (cleaned.startsWith('05')) {
-            cleaned = '966' + cleaned.substring(1);
-          } else if (cleaned.startsWith('5')) {
-            cleaned = '966' + cleaned;
-          }
-          return 'https://wa.me/' + cleaned;
         },
 
         // التصفية والتحقق من طلبات إلغاء تعذر التسليم (للمدير)
