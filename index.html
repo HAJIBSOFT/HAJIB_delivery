@@ -219,7 +219,7 @@
         <i class="fa-solid fa-truck-ramp-box text-lg"></i>
         <span class="text-[10px]">الطلب الحالي</span>
       </button>
-      <button @click="switchTab('driver-delivered')" :class="activeTab === 'driver-delivered' ? 'text-emerald-600 font-bold' : 'text-slate-400'" class="flex flex-col items-center space-y-0.5 w-24">
+      <button @click="driver-delivered" :class="activeTab === 'driver-delivered' ? 'text-emerald-600 font-bold' : 'text-slate-400'" class="flex flex-col items-center space-y-0.5 w-24">
         <i class="fa-solid fa-clipboard-check text-lg"></i>
         <span class="text-[10px]">المسلّمة</span>
       </button>
@@ -855,10 +855,19 @@
   </div>
 
   <script>
+    // تسجيل الـ Service Worker لتفعيل الـ PWA
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('sw.js')
+          .then(reg => console.log('تم تسجيل Service Worker بنجاح', reg))
+          .catch(err => console.error('فشل تسجيل Service Worker', err));
+      });
+    }
+
     // ==========================================
     // تهيئة المتغيرات الأساسية وعناوين الخوادم
     // ==========================================
-    const GAS_API_URL = "https://script.google.com/macros/s/AKfycbwx639PIXdl3VTQG0mz_73hrEYs3Hd3ZWzI4JJICKFnJiUBsz1LfAS5kCwff0LvUbuCUg/exec"; // استبدله برابط النشر الخاص بـ Google Apps Script
+    const GAS_API_URL = "https://script.google.com/macros/s/AKfycbwML3p8wzvj_zEV_-WEyeA5fb1dUJWPbolM56OmXSUeCtlTFCmhbl6x7VP6ZwN__3Fd_Q/exec"; // استبدله برابط النشر الخاص بـ Google Apps Script
 
     function logisticsApp() {
       return {
@@ -946,9 +955,13 @@
             Notification.requestPermission().then(permission => {
               if (permission === "granted") {
                 this.showNotificationPrompt = false;
-                this.showToast('تم تفعيل التنبيهات الفورية بنجاح!', 'success');
+                
+                // إرسال الإشعار والتنبيه الصوتي فوراً عند التفعيل كإثبات تشغيل (تجربة تفاعلية)
                 this.playNotificationSound();
-                this.triggerSystemNotification("تهانينا!", "لقد قمت بتفعيل الإشعارات بنجاح على هذا الهاتف.");
+                this.triggerSystemNotification("تم تفعيل الإشعارات بنجاح!", "رائع! إشعارات النظام وتنبيهات الهاتف الفورية تعمل الآن بكفاءة.");
+                
+                // إظهار التنبيه الأزرق الداخلي
+                this.showToast('تم تفعيل التنبيهات الفورية بنجاح!', 'success');
               } else if (permission === "denied") {
                 this.showNotificationPrompt = false;
                 this.showToast('تم رفض صلاحية الإشعارات. يرجى تفعيلها يدوياً من إعدادات الهاتف.', 'error');
@@ -959,7 +972,36 @@
           }
         },
 
-        // إشعار فوري وتنبيه مرئي باستخدام مكتبة Toastify المتكاملة للهواتف
+        // إرسال تنبيه للنظام (PWA System Push Notification) عبر الـ Service Worker لضمان استجابة الجوال المباشرة
+        triggerSystemNotification(title, body) {
+          if ("Notification" in window && Notification.permission === "granted") {
+            try {
+              if (navigator.serviceWorker) {
+                // جلب الـ Service Worker النشط لضمان وصول التنبيه إلى شاشة قفل الهاتف
+                navigator.serviceWorker.getRegistration().then(registration => {
+                  if (registration) {
+                    registration.showNotification(title, {
+                      body: body,
+                      icon: 'https://placehold.co/192x192/4f46e5/ffffff?text=Cargo',
+                      badge: 'https://placehold.co/192x192/4f46e5/ffffff?text=Cargo',
+                      vibrate: [200, 100, 200]
+                    });
+                  } else {
+                    new Notification(title, { body: body });
+                  }
+                }).catch(() => {
+                  new Notification(title, { body: body });
+                });
+              } else {
+                new Notification(title, { body: body });
+              }
+            } catch (e) {
+              console.error(e);
+            }
+          }
+        },
+
+        // إشعار فوري وتنبيه مرئي باستخدام مكتبة Toastify مضافاً إليه الإشعار الفوري التلقائي على الهاتف
         showToast(message, type = 'success') {
           Toastify({
             text: message,
@@ -975,31 +1017,16 @@
               direction: "rtl"
             }
           }).showToast();
+
+          // ربط كل إشعار داخلي في الصفحة لإطلاقه كإشعار خارجي مباشر على شاشة الهاتف
+          const notificationTitle = type === 'error' ? "تنبيه النظام اللوجستي" : "تحديث العمليات";
+          this.triggerSystemNotification(notificationTitle, message);
         },
 
         // تشغيل صوت رنين للتنبيهات الفورية
         playNotificationSound() {
           const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-600.wav');
           audio.play().catch(() => console.log('تعذر تشغيل الصوت تلقائياً بسبب سياسة الأمان بالمتصفح'));
-        },
-
-        // إرسال تنبيه للنظام (PWA System Push Notification) عبر الـ Service Worker
-        triggerSystemNotification(title, body) {
-          if ("Notification" in window && Notification.permission === "granted") {
-            if (navigator.serviceWorker) {
-              navigator.serviceWorker.ready.then(registration => {
-                registration.showNotification(title, {
-                  body: body,
-                  icon: 'https://placehold.co/192x192/4f46e5/ffffff?text=Cargo',
-                  vibrate: [200, 100, 200]
-                });
-              }).catch(() => {
-                new Notification(title, { body: body });
-              });
-            } else {
-              new Notification(title, { body: body });
-            }
-          }
         },
 
         // جلب البيانات الشامل ومراقبة التحديثات
@@ -1014,7 +1041,6 @@
                 const diff = ordersRes.orders.length - this.orders.length;
                 this.showToast(`ورد ${diff} طلب نقل جديد في المنصة!`, 'info');
                 this.playNotificationSound();
-                this.triggerSystemNotification("شحنات جديدة", `هناك شحنات جديدة بانتظار التوزيع والقبول.`);
               }
               
               if (silent && this.userRole === 'Manager') {
@@ -1023,7 +1049,6 @@
                 if (newPending.length > oldPendingCount) {
                   this.showToast("تنبيه: يوجد طلب تعذر تسليم جديد يتطلب موافقة الإدارة!", "error");
                   this.playNotificationSound();
-                  this.triggerSystemNotification("طلب إلغاء معلق", "تلقيت طلب إلغاء شحنة من أحد المناديب بانتظار المراجعة.");
                 }
               }
 
