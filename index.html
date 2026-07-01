@@ -2,13 +2,16 @@
 <html lang="ar" dir="rtl">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- قفل ميزة التكبير والتصغير لمنح تجربة تطبيق متكاملة للهواتف -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#4f46e5" />
   <title>نظام إدارة العمليات اللوجستية</title>
   
-  <!-- إعدادات تطبيق PWA -->
-  <meta name="theme-color" content="#4f46e5" />
   <link rel="manifest" href="manifest.json">
   <link rel="apple-touch-icon" href="https://placehold.co/192x192/4f46e5/ffffff?text=Cargo">
+  
+  <!-- تحميل ملف أنماط الخرائط أولاً لضمان عدم حدوث تشتت لرموز المواقع -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
   
   <!-- Tailwind CSS للواجهة -->
   <script src="https://cdn.tailwindcss.com"></script>
@@ -17,25 +20,46 @@
   <!-- FontAwesome للأيقونات -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   
-  <!-- مكتبة Leaflet للخرائط المجانية -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <!-- مكتبة Leaflet البرمجية للخرائط -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700&display=swap');
     body {
       font-family: 'Cairo', sans-serif;
+      /* منع التمرير المرن والإيماءات المزعجة على المتصفحات */
+      touch-action: pan-x pan-y;
     }
-    .leaflet-container {
-      z-index: 1 !important;
-    }
+    /* ضمان أن أيقونات الخريطة المخصصة تنسجم مع منطق التوجيه الجغرافي للمكتبة */
     .custom-div-icon {
       background: transparent !important;
       border: none !important;
+      box-shadow: none !important;
     }
   </style>
 </head>
 <body class="bg-slate-50 text-slate-800" x-data="logisticsApp()">
+
+  <!-- حاوية الإشعارات العائمة داخل التطبيق (Toast Alerts) -->
+  <div class="fixed top-4 left-4 z-[9999] space-y-2 pointer-events-none max-w-sm w-full px-4">
+    <template x-for="toast in toasts" :key="toast.id">
+      <div class="pointer-events-auto bg-slate-900 text-white px-4 py-3 rounded-xl shadow-2xl flex items-center space-x-3 space-x-reverse border transition duration-300 transform translate-x-0"
+           :class="toast.type === 'error' ? 'border-rose-500' : 'border-indigo-500'">
+        <div class="p-1.5 rounded-lg" :class="toast.type === 'error' ? 'bg-rose-500/10 text-rose-400' : 'bg-indigo-500/10 text-indigo-400'">
+          <i class="fa-solid text-sm" :class="toast.type === 'error' ? 'fa-triangle-exclamation' : 'fa-bell'"></i>
+        </div>
+        <span class="text-xs font-semibold flex-1" x-text="toast.message"></span>
+      </div>
+    </template>
+  </div>
+
+  <!-- شاشة حجب التحميل لمنع الضغط المزدوج والعمليات المتكررة -->
+  <div x-show="loading" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-[99999]" x-cloak>
+    <div class="bg-white px-6 py-4 rounded-2xl shadow-2xl flex items-center space-x-3 space-x-reverse border border-slate-100 animate-bounce">
+      <i class="fa-solid fa-spinner animate-spin text-2xl text-indigo-600"></i>
+      <span class="font-bold text-slate-700 text-sm">الرجاء الانتظار...</span>
+    </div>
+  </div>
 
   <!-- شاشة تسجيل الدخول -->
   <div x-show="!isLoggedIn" class="min-h-screen flex items-center justify-center bg-gradient-to-tr from-indigo-900 via-slate-900 to-blue-950 px-4">
@@ -44,7 +68,7 @@
         <div class="inline-flex p-3 bg-indigo-50 rounded-full text-indigo-600 mb-3">
           <i class="fa-solid fa-truck-fast text-4xl"></i>
         </div>
-        <h2 class="text-2xl font-bold text-slate-900">بوابة الخدمات اللوجستية</h2>
+        <h2 class="text-2xl font-bold text-slate-900">HAJIB SOFT</h2>
         <p class="text-slate-500 text-sm mt-1">يرجى تسجيل الدخول للوصول إلى لوحة التحكم</p>
       </div>
 
@@ -213,17 +237,11 @@
 
     <!-- مساحة المحتوى الرئيسية -->
     <main class="flex-1 p-4 md:p-10 overflow-y-auto relative">
-      
-      <!-- تنبيه التحميل العلوي -->
-      <div x-show="loading" class="fixed top-4 left-4 bg-slate-900 text-white px-4 py-2 rounded-lg shadow-lg flex items-center space-x-2 space-x-reverse z-50">
-        <i class="fa-solid fa-spinner animate-spin text-indigo-400"></i>
-        <span class="text-xs">جاري تحديث البيانات...</span>
-      </div>
 
       <!-- ==================== شاشات المدير ==================== -->
 
       <!-- 1. لوحة التحكم الرئيسية للمدير -->
-      <div x-show="activeTab === 'dashboard'" class="space-y-8">
+      <div x-show="activeTab === 'dashboard'" class="space-y-8" x-cloak>
         <div class="flex justify-between items-center">
           <h2 class="text-2xl md:text-3xl font-bold text-slate-900">نظرة عامة على الأنشطة</h2>
           <button @click="fetchData()" class="px-4 py-2 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 rounded-lg text-sm font-semibold transition">
@@ -231,7 +249,7 @@
           </button>
         </div>
 
-        <!-- نظام مراجعة الإلغاءات وتعذر التسليم (خاص بالمدير) -->
+        <!-- مراجعة الإلغاءات وتعذر التسليم بانتظار موافقة الإدارة -->
         <template x-if="getPendingCancellationOrders().length > 0">
           <div class="bg-rose-50 border border-rose-200 p-6 rounded-2xl space-y-4">
             <h3 class="font-bold text-rose-800 text-lg flex items-center space-x-2 space-x-reverse">
@@ -252,7 +270,6 @@
                   <div class="p-2.5 bg-slate-50 rounded-lg border-r-4 border-rose-500 text-xs text-slate-700">
                     <strong class="text-slate-800">السبب المذكور:</strong> <span x-text="order.ReasonForFailure"></span>
                   </div>
-                  <!-- أزرار الإجراء السريع للاتصال بالعميل والتحقق -->
                   <div class="flex flex-wrap gap-2 pt-1 border-t border-slate-100">
                     <a :href="formatPhoneForCall(order.CustomerPhone)" class="px-2.5 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-600 text-xs rounded-lg font-bold flex items-center space-x-1.5 space-x-reverse">
                       <i class="fa-solid fa-phone"></i><span>اتصال</span>
@@ -356,7 +373,7 @@
       </div>
 
       <!-- 2. إنشاء طلب جديد -->
-      <div x-show="activeTab === 'new-order'" class="max-w-3xl mx-auto bg-white p-6 md:p-8 rounded-2xl shadow-sm border border-slate-100">
+      <div x-show="activeTab === 'new-order'" class="max-w-3xl mx-auto bg-white p-6 md:p-8 rounded-2xl shadow-sm border border-slate-100" x-cloak>
         <h2 class="text-2xl font-bold text-slate-900 mb-6">إضافة طلب لوجستي جديد</h2>
         <form @submit.prevent="createOrder" class="space-y-6">
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
@@ -410,7 +427,7 @@
       </div>
 
       <!-- 3. إدارة المناديب -->
-      <div x-show="activeTab === 'drivers'" class="space-y-8">
+      <div x-show="activeTab === 'drivers'" class="space-y-8" x-cloak>
         <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <h2 class="text-2xl md:text-3xl font-bold text-slate-900">إدارة مناديب الشحن والتوصيل</h2>
           <button @click="showAddDriverModal = true" class="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-xl transition flex items-center space-x-2 space-x-reverse">
@@ -466,10 +483,9 @@
       </div>
 
       <!-- 4. تتبع المناديب ومواقع العملاء على الخريطة -->
-      <div x-show="activeTab === 'map'" class="space-y-6">
+      <div x-show="activeTab === 'map'" class="space-y-6" x-cloak>
         <h2 class="text-2xl font-bold text-slate-900">موقع تتبع المناديب ومواقع العملاء الفعلي</h2>
         
-        <!-- مفتاح الخريطة التوضيحي -->
         <div class="flex flex-wrap gap-4 text-xs font-semibold bg-white p-3 rounded-xl border border-slate-100 shadow-sm">
           <div class="flex items-center space-x-1.5 space-x-reverse">
             <span class="w-3.5 h-3.5 rounded-full bg-indigo-600 border border-white shadow flex items-center justify-center text-white text-[8px]"><i class="fa-solid fa-motorcycle"></i></span>
@@ -485,7 +501,6 @@
           <!-- حاوية خريطة Leaflet -->
           <div id="map-manager" class="w-full h-[500px] md:h-[600px] rounded-xl bg-slate-100"></div>
           
-          <!-- قائمة مصغرة طافية لحالة التوصيل وإمكانية التعيين السريع -->
           <div class="absolute top-6 right-6 bg-white p-4 rounded-xl shadow-lg border border-slate-100 w-80 max-h-[450px] overflow-y-auto hidden lg:block z-[999]">
             <h3 class="font-bold text-slate-900 border-b pb-2 mb-3">تعيين طلبات غير مسندة</h3>
             <div class="space-y-3">
@@ -513,7 +528,7 @@
       </div>
 
       <!-- 5. التقارير -->
-      <div x-show="activeTab === 'reports'" class="space-y-6">
+      <div x-show="activeTab === 'reports'" class="space-y-6" x-cloak>
         <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <h2 class="text-2xl font-bold text-slate-900">التقارير وسجل الشحنات والعمليات</h2>
           <button @click="exportToCSV" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-semibold transition flex items-center space-x-2 space-x-reverse">
@@ -521,7 +536,6 @@
           </button>
         </div>
 
-        <!-- فلاتر التقارير -->
         <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 grid grid-cols-1 sm:grid-cols-4 gap-4">
           <div>
             <label class="block text-xs font-semibold text-slate-500 mb-2">تصفية حسب الحالة</label>
@@ -547,7 +561,6 @@
           </div>
         </div>
 
-        <!-- جدول التقرير -->
         <div class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
           <div class="overflow-x-auto">
             <table class="w-full text-right text-sm">
@@ -596,7 +609,7 @@
       </div>
 
       <!-- 6. الإعدادات -->
-      <div x-show="activeTab === 'settings'" class="max-w-2xl mx-auto space-y-6">
+      <div x-show="activeTab === 'settings'" class="max-w-2xl mx-auto space-y-6" x-cloak>
         <h2 class="text-2xl font-bold text-slate-900">إعدادات النظام اللوجستي</h2>
         
         <div class="bg-white p-8 rounded-2xl shadow-sm border border-slate-100 space-y-6">
@@ -626,7 +639,7 @@
       <!-- ==================== شاشات المندوب ==================== -->
 
       <!-- 1. الطلبات المتاحة جغرافياً للمندوب -->
-      <div x-show="activeTab === 'driver-new'" class="space-y-6">
+      <div x-show="activeTab === 'driver-new'" class="space-y-6" x-cloak>
         <div class="flex justify-between items-center">
           <h2 class="text-xl md:text-2xl font-bold text-slate-900">طلبات متاحة بالقرب منك (أقل من 20 كم)</h2>
         </div>
@@ -662,7 +675,7 @@
       </div>
 
       <!-- 2. الطلب الحالي للمندوب -->
-      <div x-show="activeTab === 'driver-current'" class="max-w-3xl mx-auto space-y-6">
+      <div x-show="activeTab === 'driver-current'" class="max-w-3xl mx-auto space-y-6" x-cloak>
         <h2 class="text-2xl font-bold text-slate-900">المهمة النشطة الحالية</h2>
 
         <template x-if="currentDriverOrder">
@@ -681,7 +694,6 @@
                 <p class="text-slate-800 font-semibold" x-text="'الاسم: ' + currentDriverOrder.CustomerName"></p>
                 <p class="text-slate-800" x-text="'الجوال: ' + currentDriverOrder.CustomerPhone"></p>
                 
-                <!-- أزرار التواصل السريع للاتصال وإرسال رسالة واتساب للعميل -->
                 <div class="flex space-x-2 space-x-reverse pt-2">
                   <a :href="formatPhoneForCall(currentDriverOrder.CustomerPhone)" class="px-4 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded-lg font-bold text-xs flex items-center space-x-1.5 space-x-reverse">
                     <i class="fa-solid fa-phone"></i><span>اتصال مباشر</span>
@@ -692,7 +704,6 @@
                 </div>
 
                 <div class="pt-2">
-                  <!-- فتح الموقع عبر رابط خارجي لخرائط جوجل متاح للمندوب للملاحة الخارجية والسهولة -->
                   <a :href="'https://www.google.com/maps/search/?api=1&query=' + currentDriverOrder.CustomerLat + ',' + currentDriverOrder.CustomerLng" target="_blank" class="text-indigo-600 hover:underline font-bold text-xs flex items-center space-x-1 space-x-reverse">
                     <i class="fa-solid fa-diamond-turn-right"></i><span>افتح التوجيه في خرائط جوجل الخارجية</span>
                   </a>
@@ -731,7 +742,7 @@
       </div>
 
       <!-- 3. تقرير الطلبات المسلمة للمندوب -->
-      <div x-show="activeTab === 'driver-delivered'" class="space-y-6">
+      <div x-show="activeTab === 'driver-delivered'" class="space-y-6" x-cloak>
         <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex justify-between items-center">
           <div>
             <p class="text-slate-500 text-sm font-semibold">إجمالي مستحقاتك المالية المتراكمة (بعد خصم نسبة المنصة)</p>
@@ -838,15 +849,6 @@
   </div>
 
   <script>
-    // تسجيل الـ Service Worker لتفعيل الـ PWA
-    if ('serviceWorker' in navigator) {
-      window.addEventListener('load', () => {
-        navigator.serviceWorker.register('sw.js')
-          .then(reg => console.log('تم تسجيل Service Worker بنجاح', reg))
-          .catch(err => console.error('فشل تسجيل Service Worker', err));
-      });
-    }
-
     // ==========================================
     // تهيئة المتغيرات الأساسية وعناوين الخوادم
     // ==========================================
@@ -860,6 +862,9 @@
         driverId: '',
         activeTab: 'dashboard',
         loading: false,
+        
+        // نظام التنبيهات المرئية والصوتية
+        toasts: [],
         
         // البيانات الرئيسية
         orders: [],
@@ -905,41 +910,107 @@
               this.startDriverTracking();
             }
           }
-          // تحديث نسبي مستمر للوقت
+          this.requestNotificationPermission();
+
+          // التحديث التلقائي الفوري الصامت كل 12 ثانية بدون تجميد الصفحة
           setInterval(() => {
-            if (this.activeTab === 'map' && this.managerMap) {
-              this.updateMaps();
+            if (this.isLoggedIn) {
+              this.fetchData(true);
             }
-          }, 15000);
+          }, 12000);
         },
 
-        // استدعاء البيانات الشامل من الخادم والسحاب
-        async fetchData() {
-          if (!this.isLoggedIn) return;
-          this.loading = true;
-          try {
-            const ordersRes = await this.apiCall({ action: 'getOrders' });
-            if (ordersRes.success) this.orders = ordersRes.orders;
+        // إشعار فوري وتنبيه مرئي
+        showToast(message, type = 'success') {
+          const id = Date.now();
+          this.toasts.push({ id, message, type });
+          setTimeout(() => {
+            this.toasts = this.toasts.filter(t => t.id !== id);
+          }, 4000);
+        },
 
+        // طلب صلاحيات الإشعارات من المتصفح لضمان تفعيلها
+        requestNotificationPermission() {
+          if ("Notification" in window) {
+            Notification.requestPermission().then(permission => {
+              if (permission === "granted") {
+                console.log("صلاحية الإشعارات ممنوحة");
+              }
+            });
+          }
+        },
+
+        // تشغيل صوت رنين للتنبيهات الفورية
+        playNotificationSound() {
+          const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-600.wav');
+          audio.play().catch(() => console.log('تعذر تشغيل الصوت تلقائياً بسبب سياسة الأمان بالمتصفح'));
+        },
+
+        // إرسال تنبيه للنظام (Push style notification)
+        triggerSystemNotification(title, body) {
+          if ("Notification" in window && Notification.permission === "granted") {
+            new Notification(title, {
+              body: body,
+              icon: 'https://placehold.co/192x192/4f46e5/ffffff?text=Cargo'
+            });
+          }
+        },
+
+        // جلب البيانات الشامل ومراقبة التحديثات
+        async fetchData(silent = false) {
+          if (!this.isLoggedIn) return;
+          if (!silent) this.loading = true;
+          
+          try {
+            // جلب الطلبات
+            const ordersRes = await this.apiCall({ action: 'getOrders' });
+            if (ordersRes.success) {
+              // مراقبة الطلبات الجديدة للتنبيه الفوري بالصوت والرسائل
+              if (silent && this.orders.length > 0 && ordersRes.orders.length > this.orders.length) {
+                const diff = ordersRes.orders.length - this.orders.length;
+                this.showToast(`ورد ${diff} طلب نقل جديد في المنصة!`, 'info');
+                this.playNotificationSound();
+                this.triggerSystemNotification("شحنات جديدة", `هناك شحنات جديدة بانتظار التوزيع والقبول.`);
+              }
+              
+              // مراقبة طلبات تعذر التسليم الجديدة للمدير للتنبيه المباشر
+              if (silent && this.userRole === 'Manager') {
+                const oldPendingCount = this.getPendingCancellationOrders().length;
+                const newPending = ordersRes.orders.filter(o => o.Status === 'Pending Cancellation');
+                if (newPending.length > oldPendingCount) {
+                  this.showToast("تنبيه: يوجد طلب تعذر تسليم جديد يتطلب موافقة الإدارة!", "error");
+                  this.playNotificationSound();
+                  this.triggerSystemNotification("طلب إلغاء معلق", "تلقيت طلب إلغاء شحنة من أحد المناديب بانتظار المراجعة.");
+                }
+              }
+
+              this.orders = ordersRes.orders;
+            }
+
+            // جلب المناديب والتقارير
             const driversRes = await this.apiCall({ action: 'getDrivers' });
             if (driversRes.success) this.drivers = driversRes.drivers;
 
+            // جلب الإحصائيات الشاملة للوحة الإدارة
             const statsRes = await this.apiCall({ action: 'getDashboardStats' });
             if (statsRes.success) this.stats = statsRes.stats;
 
+            // جلب السياسة والإعدادات
             const settingsRes = await this.apiCall({ action: 'getSettings' });
             if (settingsRes.success) this.settings.commission = settingsRes.commission;
 
+            // تحديث الطلب الحالي للمندوب إن وجد
             if (this.userRole === 'Driver') {
               this.currentDriverOrder = this.orders.find(o => o.AssignedDriverID.toString() === this.driverId.toString() && o.Status === 'In Transit') || null;
             }
 
+            // إعادة رسم الخريطة ومواقع المناديب تلقائياً في الخلفية
             this.updateMaps();
 
           } catch (e) {
-            console.error(e);
+            console.error("خطأ في تحديث البيانات تلقائياً: ", e);
           } finally {
-            this.loading = false;
+            if (!silent) this.loading = false;
           }
         },
 
@@ -973,6 +1044,7 @@
               if (this.userRole === 'Driver') {
                 this.startDriverTracking();
               }
+              this.showToast('مرحباً بك! تم تسجيل الدخول بنجاح.', 'success');
             } else {
               alert(res.message);
             }
@@ -1044,20 +1116,19 @@
 
           const bounds = [];
 
+          // تهيئة المؤشرات بأبعاد ثابتة لـ Leaflet لمنع تشتتها عند التكبير والتصغير
           const driverIcon = L.divIcon({
-            html: `<div class="bg-indigo-600 text-white rounded-full border-2 border-white shadow-lg flex items-center justify-center" style="width: 32px; height: 32px;"><i class="fa-solid fa-motorcycle text-xs"></i></div>`,
+            html: `<div class="bg-indigo-600 text-white rounded-full border-2 border-white shadow-lg flex items-center justify-center w-[32px] h-[32px]"><i class="fa-solid fa-motorcycle text-xs"></i></div>`,
             className: 'custom-div-icon',
             iconSize: [32, 32],
-            iconAnchor: [16, 32],
-            popupAnchor: [0, -32]
+            iconAnchor: [16, 16] // التثبيت الجغرافي من المنتصف لضمان ثبات الإحداثيات عند التقريب
           });
 
           const customerIcon = L.divIcon({
-            html: `<div class="bg-rose-500 text-white rounded-full border-2 border-white shadow-lg flex items-center justify-center" style="width: 32px; height: 32px;"><i class="fa-solid fa-user text-xs"></i></div>`,
+            html: `<div class="bg-rose-500 text-white rounded-full border-2 border-white shadow-lg flex items-center justify-center w-[32px] h-[32px]"><i class="fa-solid fa-user text-xs"></i></div>`,
             className: 'custom-div-icon',
             iconSize: [32, 32],
-            iconAnchor: [16, 32],
-            popupAnchor: [0, -32]
+            iconAnchor: [16, 16]
           });
 
           this.drivers.forEach(d => {
@@ -1130,7 +1201,7 @@
           }
         },
 
-        // معالجة الأرقام للاتصال وواتساب
+        // معالجة الأرقام للاتصال وواتساب للرقم السعودي
         formatPhoneForCall(phone) {
           if (!phone) return '#';
           let cleaned = phone.toString().replace(/\D/g, '');
@@ -1162,7 +1233,7 @@
           try {
             const res = await this.apiCall({ action: 'updateOrderStatus', orderId: orderId, status: 'Failed', reason: reason });
             if (res.success) {
-              alert('تم تأكيد إلغاء الشحنة بنجاح وتحويل حالتها إلى متعثرة.');
+              this.showToast('تم تأكيد إلغاء الشحنة وتحويلها لمتعثرة.', 'success');
               this.fetchData();
             }
           } catch (e) {
@@ -1172,13 +1243,13 @@
           }
         },
 
-        // رفض المدير للإلغاء والزام المندوب بإعادة المحاولة
+        // رفض المدير للإلغاء وإلزام المندوب بالمحاولة مجدداً
         async rejectCancellation(orderId) {
           this.loading = true;
           try {
             const res = await this.apiCall({ action: 'updateOrderStatus', orderId: orderId, status: 'In Transit', reason: '' });
             if (res.success) {
-              alert('تم رفض الإلغاء وإعادة تفعيل الشحنة في عهدة المندوب لإعادة محاولة التسليم.');
+              this.showToast('تم رفض الإلغاء، وإلزام المندوب بإعادة المحاولة.', 'info');
               this.fetchData();
             }
           } catch (e) {
@@ -1188,9 +1259,9 @@
           }
         },
 
-        // طلب إلغاء من المندوب بدلاً من الإلغاء المباشر
+        // طلب إلغاء من المندوب بانتظار موافقة المدير
         promptFailedOrderApproval(orderId) {
-          const reason = prompt('يرجى كتابة سبب تعذر التسليم لإرساله للمدير للمراجعة وتأكيد الإلغاء:');
+          const reason = prompt('يرجى كتابة سبب تعذر التسليم لرفعه للإدارة للمراجعة والموافقة:');
           if (reason) {
             this.updateOrderStatus(orderId, 'Pending Cancellation', reason);
           }
@@ -1285,7 +1356,7 @@
             });
 
             if (res.success) {
-              alert('تم تسجيل وتوزيع الشحنة بنجاح في المنصة.');
+              this.showToast('تم تسجيل الطلب وتوزيعه بالمنصة بنجاح.', 'success');
               this.orderForm = { customerName: '', customerPhone: '', customerLocation: '', storeLocation: '', deliveryFee: 20, paymentStatus: 'Paid', codAmount: 0 };
               this.activeTab = 'dashboard';
               this.fetchData();
@@ -1310,7 +1381,7 @@
               password: this.newDriverForm.password
             });
             if (res.success) {
-              alert('تم تسجيل المندوب بنجاح وتهيئة حساب الدخول الخاص به.');
+              this.showToast('تم إنشاء حساب المندوب بنجاح.', 'success');
               this.showAddDriverModal = false;
               this.newDriverForm = { name: '', phone: '', email: '', zone: '', username: '', password: '' };
               this.fetchData();
@@ -1330,6 +1401,7 @@
           try {
             const res = await this.apiCall({ action: 'updateDriverStatus', driverId: driverId, status: nextStatus });
             if (res.success) {
+              this.showToast('تم تحديث حالة تفعيل حساب المندوب.', 'success');
               this.fetchData();
             }
           } catch (e) {
@@ -1345,7 +1417,7 @@
           try {
             const res = await this.apiCall({ action: 'assignOrder', orderId: orderId, driverId: driverId });
             if (res.success) {
-              alert('تم تعيين الشحنة بنجاح وبدء المتابعة.');
+              this.showToast('تم إسناد الشحنة للمندوب بنجاح.', 'success');
               this.fetchData();
             }
           } catch (e) {
@@ -1396,7 +1468,7 @@
           try {
             const res = await this.apiCall({ action: 'driverAcceptOrder', orderId: orderId, driverId: this.driverId });
             if (res.success) {
-              alert('تم قبول المهمة بنجاح، بالتوفيق في رحلتك.');
+              this.showToast('تم قبول الشحنة وبدء الملاحة للتسليم.', 'success');
               this.activeTab = 'driver-current';
               this.fetchData();
             } else {
@@ -1415,9 +1487,9 @@
             const res = await this.apiCall({ action: 'updateOrderStatus', orderId: orderId, status: status, reason: reason });
             if (res.success) {
               if (status === 'Pending Cancellation') {
-                alert('تم إرسال طلب إلغاء تعذر التسليم للإدارة بنجاح. يرجى الانتظار لحين تأكيد الطلب.');
+                this.showToast('تم إرسال طلب تعذر التسليم للإدارة بنجاح.', 'info');
               } else {
-                alert('تم التحديث وحفظ الحالة الفورية.');
+                this.showToast('تم تحديث حالة الشحنة بنجاح.', 'success');
               }
               this.activeTab = (status === 'Delivered') ? 'driver-delivered' : 'driver-new';
               this.fetchData();
@@ -1471,7 +1543,7 @@
         formatStatus(status) {
           if (status === 'Pending') return 'قيد الانتظار';
           if (status === 'In Transit') return 'قيد التوصيل';
-          if (status === 'Pending Cancellation') return 'بانتظار تأكيد الإلغاء';
+          if (status === 'Pending Cancellation') return 'انتظار مراجعة الإلغاء';
           if (status === 'Delivered') return 'تم التسليم';
           if (status === 'Failed') return 'متعثر ومُلغى';
           return status;
@@ -1553,7 +1625,7 @@
           try {
             const res = await this.apiCall({ action: 'updateSettings', commission: parseFloat(this.settings.commission) });
             if (res.success) {
-              alert('تم حفظ نسبة الشركة وتحديث النظام المالي.');
+              this.showToast('تم حفظ التغييرات المالية بنجاح.', 'success');
               this.fetchData();
             }
           } catch (e) {
@@ -1565,7 +1637,7 @@
 
         sendBroadcast() {
           if (!this.broadcastMessage.trim()) return;
-          alert('تم بث الإعلان ونشر التعميم لجميع المناديب النشطين.');
+          this.showToast('تم إرسال التعميم الفوري لجميع المناديب.', 'success');
           this.broadcastMessage = '';
         }
       };
