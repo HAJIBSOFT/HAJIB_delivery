@@ -1,6 +1,6 @@
 {
   "name": "نظام العمليات اللوجستية",
-  "short_name": "Cargo",
+  "short_name": "HAJIB DRIVER",
   "description": "نظام لإدارة تتبع الشحنات والعمليات اللوجستية والمناديب",
   "start_url": "index.html",
   "display": "standalone",
@@ -9,12 +9,12 @@
   "orientation": "portrait-primary",
   "icons": [
     {
-      "src": "https://placehold.co/192x192/4f46e5/ffffff?text=Cargo",
+      "src": "https://placehold.co/192x192/4f46e5/ffffff?text=HAJIB-D",
       "type": "image/png",
       "sizes": "192x192"
     },
     {
-      "src": "https://placehold.co/512x512/4f46e5/ffffff?text=Cargo",
+      "src": "https://placehold.co/512x512/4f46e5/ffffff?text=HAJIB-D",
       "type": "image/png",
       "sizes": "512x512"
     }
