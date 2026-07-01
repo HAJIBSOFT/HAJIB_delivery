@@ -1,0 +1,1575 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>نظام إدارة العمليات اللوجستية</title>
+  
+  <!-- إعدادات تطبيق PWA -->
+  <meta name="theme-color" content="#4f46e5" />
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="https://placehold.co/192x192/4f46e5/ffffff?text=Cargo">
+  
+  <!-- Tailwind CSS للواجهة -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Alpine.js لإدارة الحالة -->
+  <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <!-- FontAwesome للأيقونات -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  
+  <!-- مكتبة Leaflet للخرائط المجانية -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700&display=swap');
+    body {
+      font-family: 'Cairo', sans-serif;
+    }
+    .leaflet-container {
+      z-index: 1 !important;
+    }
+    .custom-div-icon {
+      background: transparent !important;
+      border: none !important;
+    }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800" x-data="logisticsApp()">
+
+  <!-- شاشة تسجيل الدخول -->
+  <div x-show="!isLoggedIn" class="min-h-screen flex items-center justify-center bg-gradient-to-tr from-indigo-900 via-slate-900 to-blue-950 px-4">
+    <div class="bg-white p-8 rounded-2xl shadow-2xl max-w-md w-full border border-slate-100">
+      <div class="text-center mb-8">
+        <div class="inline-flex p-3 bg-indigo-50 rounded-full text-indigo-600 mb-3">
+          <i class="fa-solid fa-truck-fast text-4xl"></i>
+        </div>
+        <h2 class="text-2xl font-bold text-slate-900">بوابة الخدمات اللوجستية</h2>
+        <p class="text-slate-500 text-sm mt-1">يرجى تسجيل الدخول للوصول إلى لوحة التحكم</p>
+      </div>
+
+      <form @submit.prevent="login" class="space-y-5">
+        <div>
+          <label class="block text-sm font-semibold text-slate-700 mb-2">اسم المستخدم</label>
+          <div class="relative">
+            <span class="absolute inset-y-0 right-0 flex items-center pr-3 text-slate-400">
+              <i class="fa-solid fa-user"></i>
+            </span>
+            <input type="text" x-model="loginForm.username" required class="w-full pl-3 pr-10 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none text-slate-800" placeholder="أدخل اسم المستخدم">
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-sm font-semibold text-slate-700 mb-2">كلمة المرور</label>
+          <div class="relative">
+            <span class="absolute inset-y-0 right-0 flex items-center pr-3 text-slate-400">
+              <i class="fa-solid fa-lock"></i>
+            </span>
+            <input type="password" x-model="loginForm.password" required class="w-full pl-3 pr-10 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none text-slate-800" placeholder="••••••••">
+          </div>
+        </div>
+
+        <button type="submit" :disabled="loading" class="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-xl transition duration-150 flex items-center justify-center space-x-2 space-x-reverse disabled:bg-slate-400">
+          <span x-show="!loading">تسجيل الدخول</span>
+          <i x-show="loading" class="fa-solid fa-circle-notch animate-spin"></i>
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- الهيكل الرئيسي للتطبيق بعد تسجيل الدخول -->
+  <div x-show="isLoggedIn" class="min-h-screen flex flex-col md:flex-row pb-24 md:pb-0" x-cloak>
+    
+    <!-- شريط علوي مبسط للهواتف الذكية -->
+    <header class="flex md:hidden justify-between items-center bg-slate-900 text-white px-5 py-4 sticky top-0 z-[1001] shadow-md">
+      <div class="flex items-center space-x-2 space-x-reverse">
+        <i class="fa-solid fa-truck-fast text-indigo-400 text-xl"></i>
+        <span class="font-bold text-sm" x-text="userRole === 'Manager' ? 'لوحة الإدارة' : 'بوابة المندوب'"></span>
+      </div>
+      <div class="flex items-center space-x-3 space-x-reverse">
+        <span class="text-xs text-slate-300" x-text="username"></span>
+        <button @click="logout" class="text-rose-400 text-xs hover:text-rose-300 border border-rose-500/30 px-2 py-1 rounded-lg">
+          <i class="fa-solid fa-power-off"></i> خروج
+        </button>
+      </div>
+    </header>
+
+    <!-- القائمة الجانبية للحاسب الشخصي (شاشات المـدير) -->
+    <aside x-show="userRole === 'Manager'" class="hidden md:flex w-64 bg-slate-900 text-slate-300 flex-col border-l border-slate-800">
+      <div class="p-6 border-b border-slate-800 flex items-center space-x-3 space-x-reverse">
+        <div class="p-2 bg-indigo-600 rounded-lg text-white">
+          <i class="fa-solid fa-laptop-code text-xl"></i>
+        </div>
+        <div>
+          <h1 class="font-bold text-white text-md">لوحة الإدارة</h1>
+          <p class="text-xs text-indigo-400">نظام المراقبة والتحكم</p>
+        </div>
+      </div>
+      
+      <nav class="flex-1 p-4 space-y-1.5 overflow-y-auto">
+        <a @click="switchTab('dashboard')" :class="activeTab === 'dashboard' ? 'bg-indigo-600 text-white' : 'hover:bg-slate-800 text-slate-400 hover:text-white'" class="flex items-center space-x-3 space-x-reverse px-4 py-3 rounded-xl cursor-pointer transition">
+          <i class="fa-solid fa-chart-pie w-5"></i><span>الرئيسية</span>
+        </a>
+        <a @click="switchTab('new-order')" :class="activeTab === 'new-order' ? 'bg-indigo-600 text-white' : 'hover:bg-slate-800 text-slate-400 hover:text-white'" class="flex items-center space-x-3 space-x-reverse px-4 py-3 rounded-xl cursor-pointer transition">
+          <i class="fa-solid fa-circle-plus w-5"></i><span>إنشاء طلب</span>
+        </a>
+        <a @click="switchTab('drivers')" :class="activeTab === 'drivers' ? 'bg-indigo-600 text-white' : 'hover:bg-slate-800 text-slate-400 hover:text-white'" class="flex items-center space-x-3 space-x-reverse px-4 py-3 rounded-xl cursor-pointer transition">
+          <i class="fa-solid fa-motorcycle w-5"></i><span>إدارة المناديب</span>
+        </a>
+        <a @click="switchTab('map')" :class="activeTab === 'map' ? 'bg-indigo-600 text-white' : 'hover:bg-slate-800 text-slate-400 hover:text-white'" class="flex items-center space-x-3 space-x-reverse px-4 py-3 rounded-xl cursor-pointer transition">
+          <i class="fa-solid fa-map-location-dot w-5"></i><span>خريطة التتبع</span>
+        </a>
+        <a @click="switchTab('reports')" :class="activeTab === 'reports' ? 'bg-indigo-600 text-white' : 'hover:bg-slate-800 text-slate-400 hover:text-white'" class="flex items-center space-x-3 space-x-reverse px-4 py-3 rounded-xl cursor-pointer transition">
+          <i class="fa-solid fa-file-invoice-dollar w-5"></i><span>التقارير التفصيلية</span>
+        </a>
+        <a @click="switchTab('settings')" :class="activeTab === 'settings' ? 'bg-indigo-600 text-white' : 'hover:bg-slate-800 text-slate-400 hover:text-white'" class="flex items-center space-x-3 space-x-reverse px-4 py-3 rounded-xl cursor-pointer transition">
+          <i class="fa-solid fa-gears w-5"></i><span>الإعدادات العامة</span>
+        </a>
+      </nav>
+
+      <div class="p-4 border-t border-slate-800 text-sm">
+        <div class="flex items-center justify-between">
+          <span class="text-xs text-slate-500">مرحباً، <strong class="text-white" x-text="username"></strong></span>
+          <button @click="logout" class="text-rose-400 hover:text-rose-300"><i class="fa-solid fa-power-off"></i> خروج</button>
+        </div>
+      </div>
+    </aside>
+
+    <!-- القائمة الجانبية للحاسب الشخصي (شاشات المـندوب) -->
+    <aside x-show="userRole === 'Driver'" class="hidden md:flex w-64 bg-slate-900 text-slate-300 flex-col border-l border-slate-800">
+      <div class="p-6 border-b border-slate-800 flex items-center space-x-3 space-x-reverse">
+        <div class="p-2 bg-emerald-600 rounded-lg text-white">
+          <i class="fa-solid fa-helmet-safety text-xl"></i>
+        </div>
+        <div>
+          <h1 class="font-bold text-white text-md" x-text="'بوابة المندوب'"></h1>
+          <p class="text-xs text-emerald-400">شاشة التوصيل والمطالبات</p>
+        </div>
+      </div>
+      
+      <nav class="flex-1 p-4 space-y-1.5">
+        <a @click="switchTab('driver-new')" :class="activeTab === 'driver-new' ? 'bg-emerald-600 text-white' : 'hover:bg-slate-800 text-slate-400 hover:text-white'" class="flex items-center space-x-3 space-x-reverse px-4 py-3 rounded-xl cursor-pointer transition">
+          <i class="fa-solid fa-list-check w-5"></i><span>الطلبات المتاحة</span>
+        </a>
+        <a @click="switchTab('driver-current')" :class="activeTab === 'driver-current' ? 'bg-emerald-600 text-white' : 'hover:bg-slate-800 text-slate-400 hover:text-white'" class="flex items-center space-x-3 space-x-reverse px-4 py-3 rounded-xl cursor-pointer transition">
+          <i class="fa-solid fa-truck-ramp-box w-5"></i><span>الطلب الحالي</span>
+        </a>
+        <a @click="switchTab('driver-delivered')" :class="activeTab === 'driver-delivered' ? 'bg-emerald-600 text-white' : 'hover:bg-slate-800 text-slate-400 hover:text-white'" class="flex items-center space-x-3 space-x-reverse px-4 py-3 rounded-xl cursor-pointer transition">
+          <i class="fa-solid fa-clipboard-check w-5"></i><span>عملياتي المسلّمة</span>
+        </a>
+      </nav>
+
+      <div class="p-4 border-t border-slate-800 text-sm">
+        <div class="flex items-center justify-between">
+          <span class="text-xs text-slate-500">المندوب: <strong class="text-white" x-text="username"></strong></span>
+          <button @click="logout" class="text-rose-400 hover:text-rose-300"><i class="fa-solid fa-power-off"></i> خروج</button>
+        </div>
+      </div>
+    </aside>
+
+    <!-- شريط الملاحة السفلي للهواتف الذكية (Manager Bottom Nav Bar) -->
+    <nav x-show="isLoggedIn && userRole === 'Manager'" class="flex md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 py-2 justify-around items-center z-[1001] shadow-lg">
+      <button @click="switchTab('dashboard')" :class="activeTab === 'dashboard' ? 'text-indigo-600 font-bold' : 'text-slate-400'" class="flex flex-col items-center space-y-0.5 w-14">
+        <i class="fa-solid fa-chart-pie text-lg"></i>
+        <span class="text-[10px]">الرئيسية</span>
+      </button>
+      <button @click="switchTab('new-order')" :class="activeTab === 'new-order' ? 'text-indigo-600 font-bold' : 'text-slate-400'" class="flex flex-col items-center space-y-0.5 w-14">
+        <i class="fa-solid fa-circle-plus text-lg"></i>
+        <span class="text-[10px]">طلب جديد</span>
+      </button>
+      <button @click="switchTab('drivers')" :class="activeTab === 'drivers' ? 'text-indigo-600 font-bold' : 'text-slate-400'" class="flex flex-col items-center space-y-0.5 w-14">
+        <i class="fa-solid fa-motorcycle text-lg"></i>
+        <span class="text-[10px]">المناديب</span>
+      </button>
+      <button @click="switchTab('map')" :class="activeTab === 'map' ? 'text-indigo-600 font-bold' : 'text-slate-400'" class="flex flex-col items-center space-y-0.5 w-14">
+        <i class="fa-solid fa-map-location-dot text-lg"></i>
+        <span class="text-[10px]">التتبع</span>
+      </button>
+      <button @click="switchTab('reports')" :class="activeTab === 'reports' ? 'text-indigo-600 font-bold' : 'text-slate-400'" class="flex flex-col items-center space-y-0.5 w-14">
+        <i class="fa-solid fa-file-invoice-dollar text-lg"></i>
+        <span class="text-[10px]">التقارير</span>
+      </button>
+      <button @click="switchTab('settings')" :class="activeTab === 'settings' ? 'text-indigo-600 font-bold' : 'text-slate-400'" class="flex flex-col items-center space-y-0.5 w-14">
+        <i class="fa-solid fa-gears text-lg"></i>
+        <span class="text-[10px]">الإعدادات</span>
+      </button>
+    </nav>
+
+    <!-- شريط الملاحة السفلي للهواتف الذكية (Driver Bottom Nav Bar) -->
+    <nav x-show="isLoggedIn && userRole === 'Driver'" class="flex md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 py-2 justify-around items-center z-[1001] shadow-lg">
+      <button @click="switchTab('driver-new')" :class="activeTab === 'driver-new' ? 'text-emerald-600 font-bold' : 'text-slate-400'" class="flex flex-col items-center space-y-0.5 w-24">
+        <i class="fa-solid fa-list-check text-lg"></i>
+        <span class="text-[10px]">الطلبات المتاحة</span>
+      </button>
+      <button @click="switchTab('driver-current')" :class="activeTab === 'driver-current' ? 'text-emerald-600 font-bold' : 'text-slate-400'" class="flex flex-col items-center space-y-0.5 w-24">
+        <i class="fa-solid fa-truck-ramp-box text-lg"></i>
+        <span class="text-[10px]">الطلب الحالي</span>
+      </button>
+      <button @click="switchTab('driver-delivered')" :class="activeTab === 'driver-delivered' ? 'text-emerald-600 font-bold' : 'text-slate-400'" class="flex flex-col items-center space-y-0.5 w-24">
+        <i class="fa-solid fa-clipboard-check text-lg"></i>
+        <span class="text-[10px]">المسلّمة</span>
+      </button>
+    </nav>
+
+    <!-- مساحة المحتوى الرئيسية -->
+    <main class="flex-1 p-4 md:p-10 overflow-y-auto relative">
+      
+      <!-- تنبيه التحميل العلوي -->
+      <div x-show="loading" class="fixed top-4 left-4 bg-slate-900 text-white px-4 py-2 rounded-lg shadow-lg flex items-center space-x-2 space-x-reverse z-50">
+        <i class="fa-solid fa-spinner animate-spin text-indigo-400"></i>
+        <span class="text-xs">جاري تحديث البيانات...</span>
+      </div>
+
+      <!-- ==================== شاشات المدير ==================== -->
+
+      <!-- 1. لوحة التحكم الرئيسية للمدير -->
+      <div x-show="activeTab === 'dashboard'" class="space-y-8">
+        <div class="flex justify-between items-center">
+          <h2 class="text-2xl md:text-3xl font-bold text-slate-900">نظرة عامة على الأنشطة</h2>
+          <button @click="fetchData()" class="px-4 py-2 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 rounded-lg text-sm font-semibold transition">
+            <i class="fa-solid fa-rotate mr-1"></i> تحديث فوري
+          </button>
+        </div>
+
+        <!-- نظام مراجعة الإلغاءات وتعذر التسليم (خاص بالمدير) -->
+        <template x-if="getPendingCancellationOrders().length > 0">
+          <div class="bg-rose-50 border border-rose-200 p-6 rounded-2xl space-y-4">
+            <h3 class="font-bold text-rose-800 text-lg flex items-center space-x-2 space-x-reverse">
+              <i class="fa-solid fa-triangle-exclamation text-rose-600"></i>
+              <span>طلبات تعذر تسليم بانتظار المراجعة والموافقة (<span x-text="getPendingCancellationOrders().length"></span>)</span>
+            </h3>
+            <p class="text-rose-700 text-xs">أفاد المناديب بالتعذر للأسباب التالية. يرجى التواصل مع العميل للتأكد واتخاذ القرار المناسب:</p>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <template x-for="order in getPendingCancellationOrders()" :key="order.OrderID">
+                <div class="bg-white p-4 rounded-xl border border-rose-100 shadow-sm space-y-3">
+                  <div class="flex justify-between items-start">
+                    <div>
+                      <span class="text-xs font-semibold text-rose-600" x-text="order.OrderID"></span>
+                      <h4 class="font-bold text-slate-800 text-sm mt-0.5" x-text="'العميل: ' + order.CustomerName"></h4>
+                    </div>
+                    <span class="text-xs bg-rose-50 text-rose-700 px-2 py-1 rounded-lg" x-text="'المندوب: ' + getDriverName(order.AssignedDriverID)"></span>
+                  </div>
+                  <div class="p-2.5 bg-slate-50 rounded-lg border-r-4 border-rose-500 text-xs text-slate-700">
+                    <strong class="text-slate-800">السبب المذكور:</strong> <span x-text="order.ReasonForFailure"></span>
+                  </div>
+                  <!-- أزرار الإجراء السريع للاتصال بالعميل والتحقق -->
+                  <div class="flex flex-wrap gap-2 pt-1 border-t border-slate-100">
+                    <a :href="formatPhoneForCall(order.CustomerPhone)" class="px-2.5 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-600 text-xs rounded-lg font-bold flex items-center space-x-1.5 space-x-reverse">
+                      <i class="fa-solid fa-phone"></i><span>اتصال</span>
+                    </a>
+                    <a :href="formatPhoneForWhatsApp(order.CustomerPhone)" target="_blank" class="px-2.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 text-xs rounded-lg font-bold flex items-center space-x-1.5 space-x-reverse">
+                      <i class="fa-brands fa-whatsapp"></i><span>واتساب</span>
+                    </a>
+                    <button @click="approveCancellation(order.OrderID, order.ReasonForFailure)" class="px-2.5 py-1.5 bg-rose-600 hover:bg-rose-700 text-white text-xs rounded-lg font-bold">
+                      تأكيد الإلغاء
+                    </button>
+                    <button @click="rejectCancellation(order.OrderID)" class="px-2.5 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs rounded-lg font-bold">
+                      رفض وإلزام المحاولة
+                    </button>
+                  </div>
+                </div>
+              </template>
+            </div>
+          </div>
+        </template>
+
+        <!-- الإحصائيات -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center justify-between">
+            <div>
+              <p class="text-sm font-semibold text-slate-500">إجمالي الطلبات</p>
+              <h3 class="text-3xl font-bold text-slate-900 mt-1" x-text="stats.total">0</h3>
+            </div>
+            <div class="p-4 bg-blue-50 text-blue-600 rounded-2xl"><i class="fa-solid fa-boxes-stacked text-2xl"></i></div>
+          </div>
+          <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center justify-between">
+            <div>
+              <p class="text-sm font-semibold text-slate-500">الطلبات المسلّمة</p>
+              <h3 class="text-3xl font-bold text-slate-900 mt-1" x-text="stats.delivered">0</h3>
+            </div>
+            <div class="p-4 bg-emerald-50 text-emerald-600 rounded-2xl"><i class="fa-solid fa-circle-check text-2xl"></i></div>
+          </div>
+          <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center justify-between">
+            <div>
+              <p class="text-sm font-semibold text-slate-500">قيد التوصيل</p>
+              <h3 class="text-3xl font-bold text-slate-900 mt-1" x-text="stats.transit">0</h3>
+            </div>
+            <div class="p-4 bg-amber-50 text-amber-600 rounded-2xl"><i class="fa-solid fa-truck-ramp-box text-2xl"></i></div>
+          </div>
+          <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center justify-between">
+            <div>
+              <p class="text-sm font-semibold text-slate-500">عمليات متعثرة</p>
+              <h3 class="text-3xl font-bold text-slate-900 mt-1" x-text="stats.failed">0</h3>
+            </div>
+            <div class="p-4 bg-rose-50 text-rose-600 rounded-2xl"><i class="fa-solid fa-triangle-exclamation text-2xl"></i></div>
+          </div>
+        </div>
+
+        <!-- أحدث الطلبات والمناديب النشطين -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 lg:col-span-2">
+            <h3 class="font-bold text-lg text-slate-900 mb-4">آخر طلبات النقل</h3>
+            <div class="overflow-x-auto">
+              <table class="w-full text-right text-sm">
+                <thead>
+                  <tr class="text-slate-500 border-b border-slate-100">
+                    <th class="pb-3">الرقم</th>
+                    <th class="pb-3">العميل</th>
+                    <th class="pb-3">الرسوم</th>
+                    <th class="pb-3">الحالة</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-50">
+                  <template x-for="order in orders.slice(-5).reverse()" :key="order.OrderID">
+                    <tr>
+                      <td class="py-3 font-semibold text-indigo-600" x-text="order.OrderID"></td>
+                      <td class="py-3" x-text="order.CustomerName"></td>
+                      <td class="py-3" x-text="order.DeliveryFee + ' ر.س'"></td>
+                      <td class="py-3">
+                        <span :class="getStatusBadgeClass(order.Status)" class="px-2.5 py-1 rounded-full text-xs font-semibold" x-text="formatStatus(order.Status)"></span>
+                      </td>
+                    </tr>
+                  </template>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+            <h3 class="font-bold text-lg text-slate-900 mb-4">المناديب النشطين</h3>
+            <div class="space-y-4">
+              <template x-for="driver in drivers.slice(0, 4)" :key="driver.driverId">
+                <div class="flex items-center justify-between">
+                  <div class="flex items-center space-x-3 space-x-reverse">
+                    <div class="p-2 bg-slate-100 rounded-xl text-slate-600"><i class="fa-solid fa-user-ninja"></i></div>
+                    <div>
+                      <p class="font-semibold text-slate-900" x-text="driver.name"></p>
+                      <p class="text-xs text-slate-400" x-text="driver.zone"></p>
+                    </div>
+                  </div>
+                  <span :class="driver.status === 'Active' ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'" class="px-2.5 py-0.5 rounded-full text-xs font-semibold" x-text="driver.status === 'Active' ? 'نشط' : 'معطل'"></span>
+                </div>
+              </template>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 2. إنشاء طلب جديد -->
+      <div x-show="activeTab === 'new-order'" class="max-w-3xl mx-auto bg-white p-6 md:p-8 rounded-2xl shadow-sm border border-slate-100">
+        <h2 class="text-2xl font-bold text-slate-900 mb-6">إضافة طلب لوجستي جديد</h2>
+        <form @submit.prevent="createOrder" class="space-y-6">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
+            <div>
+              <label class="block text-sm font-semibold text-slate-700 mb-2">اسم العميل</label>
+              <input type="text" x-model="orderForm.customerName" required class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none text-slate-800">
+            </div>
+            <div>
+              <label class="block text-sm font-semibold text-slate-700 mb-2">رقم جوال العميل</label>
+              <input type="text" x-model="orderForm.customerPhone" required class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none text-slate-800">
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
+            <div>
+              <label class="block text-sm font-semibold text-slate-700 mb-2">موقع العميل (إحداثيات خط العرض/الطول)</label>
+              <div class="flex space-x-2 space-x-reverse">
+                <input type="text" placeholder="24.7136, 46.6753" x-model="orderForm.customerLocation" required class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none text-slate-800 text-xs">
+                <button type="button" @click="pickLocation('customer')" class="px-3 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 rounded-xl"><i class="fa-solid fa-location-dot"></i></button>
+              </div>
+            </div>
+            <div>
+              <label class="block text-sm font-semibold text-slate-700 mb-2">موقع المتجر (اختياري - إحداثيات)</label>
+              <div class="flex space-x-2 space-x-reverse">
+                <input type="text" placeholder="24.7136, 46.6753" x-model="orderForm.storeLocation" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none text-slate-800 text-xs">
+                <button type="button" @click="pickLocation('store')" class="px-3 bg-slate-50 text-slate-600 hover:bg-slate-100 rounded-xl"><i class="fa-solid fa-store"></i></button>
+              </div>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-6">
+            <div>
+              <label class="block text-sm font-semibold text-slate-700 mb-2">رسوم التوصيل (ر.س)</label>
+              <input type="number" x-model="orderForm.deliveryFee" required class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none text-slate-800">
+            </div>
+            <div>
+              <label class="block text-sm font-semibold text-slate-700 mb-2">حالة الدفع للطلب</label>
+              <select x-model="orderForm.paymentStatus" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none text-slate-800">
+                <option value="Paid">مدفوع مسبقاً</option>
+                <option value="COD">الدفع عند الاستلام</option>
+              </select>
+            </div>
+            <div x-show="orderForm.paymentStatus === 'COD'">
+              <label class="block text-sm font-semibold text-slate-700 mb-2">مبلغ التحصيل المطلوب</label>
+              <input type="number" x-model="orderForm.codAmount" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none text-slate-800">
+            </div>
+          </div>
+
+          <button type="submit" :disabled="loading" class="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-xl transition duration-150">إرسال وتعميم الطلب</button>
+        </form>
+      </div>
+
+      <!-- 3. إدارة المناديب -->
+      <div x-show="activeTab === 'drivers'" class="space-y-8">
+        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <h2 class="text-2xl md:text-3xl font-bold text-slate-900">إدارة مناديب الشحن والتوصيل</h2>
+          <button @click="showAddDriverModal = true" class="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-xl transition flex items-center space-x-2 space-x-reverse">
+            <i class="fa-solid fa-plus"></i><span>تسجيل مندوب جديد</span>
+          </button>
+        </div>
+
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+          <div class="overflow-x-auto">
+            <table class="w-full text-right text-sm">
+              <thead class="bg-slate-50 text-slate-500 border-b border-slate-100">
+                <tr>
+                  <th class="p-4">اسم المندوب</th>
+                  <th class="p-4">الجوال والبريد</th>
+                  <th class="p-4">النطاق الجغرافي</th>
+                  <th class="p-4">إحصائيات الطلبات</th>
+                  <th class="p-4">رسوم مستحقة</th>
+                  <th class="p-4">الحالة</th>
+                  <th class="p-4 text-center">التحكم والتعطيل</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-100">
+                <template x-for="driver in drivers" :key="driver.driverId">
+                  <tr>
+                    <td class="p-4">
+                      <p class="font-semibold text-slate-900" x-text="driver.name"></p>
+                      <p class="text-xs text-slate-400" x-text="driver.driverId"></p>
+                    </td>
+                    <td class="p-4">
+                      <p x-text="driver.phone"></p>
+                      <p class="text-xs text-slate-400" x-text="driver.email"></p>
+                    </td>
+                    <td class="p-4 text-slate-600 font-medium" x-text="driver.zone"></td>
+                    <td class="p-4">
+                      <span class="text-emerald-600 font-semibold" x-text="driver.stats.delivered + ' مسلمة'"></span> / 
+                      <span class="text-rose-600 font-semibold" x-text="driver.stats.failed + ' متعثرة'"></span>
+                    </td>
+                    <td class="p-4 font-semibold text-slate-900" x-text="calculateDriverPayout(driver.stats.feesEarned) + ' ر.س'"></td>
+                    <td class="p-4">
+                      <span :class="driver.status === 'Active' ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'" class="px-2.5 py-1 rounded-full text-xs font-semibold" x-text="driver.status === 'Active' ? 'نشط' : 'معطل'"></span>
+                    </td>
+                    <td class="p-4 text-center">
+                      <button @click="toggleDriverStatus(driver.driverId, driver.status)" :class="driver.status === 'Active' ? 'text-rose-600 bg-rose-50 hover:bg-rose-100' : 'text-emerald-600 bg-emerald-50 hover:bg-emerald-100'" class="px-3 py-1.5 rounded-lg text-xs font-semibold transition">
+                        <span x-text="driver.status === 'Active' ? 'تعطيل الحساب' : 'تنشيط الحساب'"></span>
+                      </button>
+                    </td>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- 4. تتبع المناديب ومواقع العملاء على الخريطة -->
+      <div x-show="activeTab === 'map'" class="space-y-6">
+        <h2 class="text-2xl font-bold text-slate-900">موقع تتبع المناديب ومواقع العملاء الفعلي</h2>
+        
+        <!-- مفتاح الخريطة التوضيحي -->
+        <div class="flex flex-wrap gap-4 text-xs font-semibold bg-white p-3 rounded-xl border border-slate-100 shadow-sm">
+          <div class="flex items-center space-x-1.5 space-x-reverse">
+            <span class="w-3.5 h-3.5 rounded-full bg-indigo-600 border border-white shadow flex items-center justify-center text-white text-[8px]"><i class="fa-solid fa-motorcycle"></i></span>
+            <span class="text-slate-600">مندوب توصيل</span>
+          </div>
+          <div class="flex items-center space-x-1.5 space-x-reverse">
+            <span class="w-3.5 h-3.5 rounded-full bg-rose-500 border border-white shadow flex items-center justify-center text-white text-[8px]"><i class="fa-solid fa-user"></i></span>
+            <span class="text-slate-600">موقع عميل</span>
+          </div>
+        </div>
+
+        <div class="bg-white p-3 rounded-2xl shadow-sm border border-slate-100 relative">
+          <!-- حاوية خريطة Leaflet -->
+          <div id="map-manager" class="w-full h-[500px] md:h-[600px] rounded-xl bg-slate-100"></div>
+          
+          <!-- قائمة مصغرة طافية لحالة التوصيل وإمكانية التعيين السريع -->
+          <div class="absolute top-6 right-6 bg-white p-4 rounded-xl shadow-lg border border-slate-100 w-80 max-h-[450px] overflow-y-auto hidden lg:block z-[999]">
+            <h3 class="font-bold text-slate-900 border-b pb-2 mb-3">تعيين طلبات غير مسندة</h3>
+            <div class="space-y-3">
+              <template x-for="order in getUnassignedOrders()" :key="order.OrderID">
+                <div class="p-3 bg-slate-50 rounded-lg hover:bg-indigo-50 transition">
+                  <p class="font-semibold text-sm text-indigo-600" x-text="order.OrderID"></p>
+                  <p class="text-xs text-slate-600 mt-0.5" x-text="'العميل: ' + order.CustomerName"></p>
+                  <div class="mt-2 flex items-center justify-between">
+                    <span class="text-[10px] bg-amber-50 text-amber-600 px-2 py-0.5 rounded" x-text="'رسوم: ' + order.DeliveryFee + ' ر.س'"></span>
+                    <select @change="assignOrderDirectly(order.OrderID, $event.target.value)" class="text-xs bg-white border rounded px-1.5 py-1 text-slate-700 focus:outline-none">
+                      <option value="">إسناد لمندوب...</option>
+                      <template x-for="d in getActiveDrivers()" :key="d.driverId">
+                        <option :value="d.driverId" x-text="d.name"></option>
+                      </template>
+                    </select>
+                  </div>
+                </div>
+              </template>
+              <div x-show="getUnassignedOrders().length === 0" class="text-center py-4 text-xs text-slate-400">
+                لا توجد طلبات معلقة بانتظار التوزيع حالياً.
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 5. التقارير -->
+      <div x-show="activeTab === 'reports'" class="space-y-6">
+        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <h2 class="text-2xl font-bold text-slate-900">التقارير وسجل الشحنات والعمليات</h2>
+          <button @click="exportToCSV" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-semibold transition flex items-center space-x-2 space-x-reverse">
+            <i class="fa-solid fa-file-excel"></i><span>تصدير البيانات CSV</span>
+          </button>
+        </div>
+
+        <!-- فلاتر التقارير -->
+        <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 grid grid-cols-1 sm:grid-cols-4 gap-4">
+          <div>
+            <label class="block text-xs font-semibold text-slate-500 mb-2">تصفية حسب الحالة</label>
+            <select x-model="reportFilter.status" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500 text-sm">
+              <option value="all">كل الحالات</option>
+              <option value="Pending">قيد الانتظار</option>
+              <option value="In Transit">قيد التوصيل</option>
+              <option value="Pending Cancellation">انتظار الإلغاء</option>
+              <option value="Delivered">تم التسليم</option>
+              <option value="Failed">متعثرة</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-500 mb-2">من تاريخ</label>
+            <input type="date" x-model="reportFilter.startDate" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500 text-sm">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-500 mb-2">إلى تاريخ</label>
+            <input type="date" x-model="reportFilter.endDate" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500 text-sm">
+          </div>
+          <div class="flex items-end">
+            <button @click="resetReportFilters" class="w-full py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-sm font-semibold transition">إعادة تعيين الفلترة</button>
+          </div>
+        </div>
+
+        <!-- جدول التقرير -->
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+          <div class="overflow-x-auto">
+            <table class="w-full text-right text-sm">
+              <thead class="bg-slate-50 text-slate-500 border-b border-slate-100">
+                <tr>
+                  <th class="p-4">رقم الشحنة</th>
+                  <th class="p-4">العميل والجوال</th>
+                  <th class="p-4">المندوب</th>
+                  <th class="p-4">تاريخ الطلب</th>
+                  <th class="p-4">رسوم التوصيل</th>
+                  <th class="p-4">حالة الشحنة</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-100">
+                <template x-for="order in getFilteredOrders()" :key="order.OrderID">
+                  <tr>
+                    <td class="p-4 font-semibold text-indigo-600" x-text="order.OrderID"></td>
+                    <td class="p-4">
+                      <p class="font-semibold text-slate-900" x-text="order.CustomerName"></p>
+                      <div class="flex space-x-2 space-x-reverse mt-1">
+                        <a :href="formatPhoneForCall(order.CustomerPhone)" class="text-blue-600 hover:underline text-xs flex items-center space-x-1 space-x-reverse">
+                          <i class="fa-solid fa-phone"></i><span x-text="order.CustomerPhone"></span>
+                        </a>
+                        <span class="text-slate-300">|</span>
+                        <a :href="formatPhoneForWhatsApp(order.CustomerPhone)" target="_blank" class="text-emerald-600 hover:underline text-xs flex items-center space-x-1 space-x-reverse">
+                          <i class="fa-brands fa-whatsapp"></i><span>واتساب</span>
+                        </a>
+                      </div>
+                    </td>
+                    <td class="p-4" x-text="getDriverName(order.AssignedDriverID)"></td>
+                    <td class="p-4" x-text="formatDate(order.CreatedAt)"></td>
+                    <td class="p-4 font-semibold" x-text="order.DeliveryFee + ' ر.س'"></td>
+                    <td class="p-4">
+                      <span :class="getStatusBadgeClass(order.Status)" class="px-2.5 py-1 rounded-full text-xs font-semibold" x-text="formatStatus(order.Status)"></span>
+                      <p x-show="order.Status === 'Failed' || order.Status === 'Pending Cancellation'" class="text-xs text-rose-500 mt-1" x-text="'السبب: ' + order.ReasonForFailure"></p>
+                    </td>
+                  </tr>
+                </template>
+                <tr x-show="getFilteredOrders().length === 0">
+                  <td colspan="6" class="p-8 text-center text-slate-400">لا توجد شحنات مطابقة لشروط البحث والفلاتر المدخلة.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- 6. الإعدادات -->
+      <div x-show="activeTab === 'settings'" class="max-w-2xl mx-auto space-y-6">
+        <h2 class="text-2xl font-bold text-slate-900">إعدادات النظام اللوجستي</h2>
+        
+        <div class="bg-white p-8 rounded-2xl shadow-sm border border-slate-100 space-y-6">
+          <h3 class="font-bold text-slate-900 border-b pb-2">السياسة المالية وحوافز المناديب</h3>
+          <div>
+            <label class="block text-sm font-semibold text-slate-700 mb-2">نسبة الشركة من رسوم التوصيل (%)</label>
+            <div class="flex space-x-4 space-x-reverse">
+              <input type="number" x-model="settings.commission" class="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500">
+              <button @click="saveSettings" class="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-semibold transition">حفظ التعديلات</button>
+            </div>
+            <p class="text-xs text-slate-400 mt-2">مثال: إذا كانت الرسوم 20 ريال ونسبة الشركة 15%، يحصل المندوب على 17 ريال وتحصل المنصة على 3 ريال.</p>
+          </div>
+        </div>
+
+        <div class="bg-white p-8 rounded-2xl shadow-sm border border-slate-100 space-y-6">
+          <h3 class="font-bold text-slate-900 border-b pb-2">بث إعلان / تنبيه عام للمناديب</h3>
+          <div class="space-y-4">
+            <div>
+              <label class="block text-sm font-semibold text-slate-700 mb-2">نص التنبيه</label>
+              <textarea x-model="broadcastMessage" rows="3" placeholder="اكتب رسالة عامة تظهر لجميع المناديب في واجهتهم الخاصة..." class="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500"></textarea>
+            </div>
+            <button @click="sendBroadcast" class="w-full py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-semibold transition">بث الإعلان الفوري</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ==================== شاشات المندوب ==================== -->
+
+      <!-- 1. الطلبات المتاحة جغرافياً للمندوب -->
+      <div x-show="activeTab === 'driver-new'" class="space-y-6">
+        <div class="flex justify-between items-center">
+          <h2 class="text-xl md:text-2xl font-bold text-slate-900">طلبات متاحة بالقرب منك (أقل من 20 كم)</h2>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <template x-for="order in getNearbyOrders()" :key="order.OrderID">
+            <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 space-y-4">
+              <div class="flex justify-between items-start">
+                <div>
+                  <span class="text-xs text-slate-400" x-text="formatDate(order.CreatedAt)"></span>
+                  <h3 class="font-bold text-lg text-indigo-600 mt-1" x-text="order.OrderID"></h3>
+                </div>
+                <span class="px-3 py-1.5 bg-emerald-50 text-emerald-600 font-bold rounded-xl text-xs" x-text="'صافي الدفع: ' + calculateDriverPayout(order.DeliveryFee) + ' ر.س'"></span>
+              </div>
+
+              <div class="space-y-2 border-t border-b border-slate-50 py-3 text-sm">
+                <p><strong class="text-slate-500">العميل:</strong> <span class="text-slate-800 font-semibold" x-text="order.CustomerName"></span></p>
+                <p x-show="order.storeDistance"><strong class="text-slate-500">المسافة إلى المتجر:</strong> <span class="text-slate-800 font-semibold" x-text="order.storeDistance.toFixed(1) + ' كم'"></span></p>
+                <p><strong class="text-slate-500">المسافة إلى العميل:</strong> <span class="text-slate-800 font-semibold" x-text="order.customerDistance.toFixed(1) + ' كم'"></span></p>
+                <p><strong class="text-slate-500">نوع العملية المالي:</strong> <span class="text-amber-600 font-semibold" x-text="order.PaymentStatus === 'COD' ? 'تحصيل نقدي عند الاستلام (' + order.CODAmount + ' ر.س)' : 'مدفوع مسبقاً'"></span></p>
+              </div>
+
+              <button @click="driverAcceptOrder(order.OrderID)" class="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl transition">قبول الطلب وبدء الرحلة</button>
+            </div>
+          </template>
+
+          <div x-show="getNearbyOrders().length === 0" class="md:col-span-2 text-center py-16 bg-white rounded-2xl border border-dashed border-slate-200">
+            <div class="inline-flex p-4 bg-slate-50 rounded-full text-slate-400 mb-4"><i class="fa-solid fa-map-pin text-3xl"></i></div>
+            <h3 class="font-bold text-slate-700">لا توجد طلبات معلقة قريبة</h3>
+            <p class="text-slate-400 text-sm mt-1">تأكد من تفعيل خاصية تحديد الموقع الجغرافي بالمتصفح، أو انتظر إسناد طلب مباشر من الإدارة.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- 2. الطلب الحالي للمندوب -->
+      <div x-show="activeTab === 'driver-current'" class="max-w-3xl mx-auto space-y-6">
+        <h2 class="text-2xl font-bold text-slate-900">المهمة النشطة الحالية</h2>
+
+        <template x-if="currentDriverOrder">
+          <div class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden space-y-6 p-6">
+            <div class="flex justify-between items-start border-b pb-4">
+              <div>
+                <span class="text-xs text-slate-400" x-text="formatDate(currentDriverOrder.CreatedAt)"></span>
+                <h3 class="font-bold text-xl text-indigo-600 mt-1" x-text="currentDriverOrder.OrderID"></h3>
+              </div>
+              <span class="px-3 py-1 bg-amber-50 text-amber-600 rounded-full text-xs font-semibold">قيد التوصيل والتحصيل</span>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-6 text-sm">
+              <div class="space-y-2">
+                <p class="text-slate-500 font-bold">تفاصيل العميل والوجهة:</p>
+                <p class="text-slate-800 font-semibold" x-text="'الاسم: ' + currentDriverOrder.CustomerName"></p>
+                <p class="text-slate-800" x-text="'الجوال: ' + currentDriverOrder.CustomerPhone"></p>
+                
+                <!-- أزرار التواصل السريع للاتصال وإرسال رسالة واتساب للعميل -->
+                <div class="flex space-x-2 space-x-reverse pt-2">
+                  <a :href="formatPhoneForCall(currentDriverOrder.CustomerPhone)" class="px-4 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded-lg font-bold text-xs flex items-center space-x-1.5 space-x-reverse">
+                    <i class="fa-solid fa-phone"></i><span>اتصال مباشر</span>
+                  </a>
+                  <a :href="formatPhoneForWhatsApp(currentDriverOrder.CustomerPhone)" target="_blank" class="px-4 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 rounded-lg font-bold text-xs flex items-center space-x-1.5 space-x-reverse">
+                    <i class="fa-brands fa-whatsapp text-sm"></i><span>ارسال واتساب</span>
+                  </a>
+                </div>
+
+                <div class="pt-2">
+                  <!-- فتح الموقع عبر رابط خارجي لخرائط جوجل متاح للمندوب للملاحة الخارجية والسهولة -->
+                  <a :href="'https://www.google.com/maps/search/?api=1&query=' + currentDriverOrder.CustomerLat + ',' + currentDriverOrder.CustomerLng" target="_blank" class="text-indigo-600 hover:underline font-bold text-xs flex items-center space-x-1 space-x-reverse">
+                    <i class="fa-solid fa-diamond-turn-right"></i><span>افتح التوجيه في خرائط جوجل الخارجية</span>
+                  </a>
+                </div>
+              </div>
+
+              <div class="space-y-2">
+                <p class="text-slate-500 font-bold">المتطلبات المالية والتوصيل:</p>
+                <p class="text-slate-800" x-text="'رسوم التوصيل: ' + currentDriverOrder.DeliveryFee + ' ر.س'"></p>
+                <p class="text-emerald-600 font-bold" x-text="'مكسبك المتوقع: ' + calculateDriverPayout(currentDriverOrder.DeliveryFee) + ' ر.س'"></p>
+                <p class="text-rose-600 font-bold" x-text="currentDriverOrder.PaymentStatus === 'COD' ? 'مطلوب تحصيل مالي: ' + currentDriverOrder.CODAmount + ' ر.س' : 'الطلب مدفوع إلكترونياً'"></p>
+              </div>
+            </div>
+
+            <div class="border-t pt-6 space-y-4">
+              <h4 class="font-bold text-slate-800">تحديث حالة الشحنة الفعلي</h4>
+              <div class="flex flex-col sm:flex-row gap-4">
+                <button @click="updateOrderStatus(currentDriverOrder.OrderID, 'Delivered')" class="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl transition flex items-center justify-center space-x-2 space-x-reverse">
+                  <i class="fa-solid fa-check"></i><span>تم التسليم بنجاح</span>
+                </button>
+                <button @click="promptFailedOrderApproval(currentDriverOrder.OrderID)" class="flex-1 py-3 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-xl transition flex items-center justify-center space-x-2 space-x-reverse">
+                  <i class="fa-solid fa-triangle-exclamation"></i><span>طلب تعذر تسليم (موافقة الإدارة)</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </template>
+
+        <template x-if="!currentDriverOrder">
+          <div class="text-center py-16 bg-white rounded-2xl border border-slate-100">
+            <div class="inline-flex p-4 bg-slate-50 rounded-full text-slate-400 mb-4"><i class="fa-solid fa-circle-info text-3xl"></i></div>
+            <h3 class="font-bold text-slate-700">لا يوجد طلبات نشطة تعمل عليها حالياً</h3>
+            <p class="text-slate-400 text-sm mt-1">يمكنك تصفح علامة تبويب الطلبات المتاحة للبدء فوراً.</p>
+          </div>
+        </template>
+      </div>
+
+      <!-- 3. تقرير الطلبات المسلمة للمندوب -->
+      <div x-show="activeTab === 'driver-delivered'" class="space-y-6">
+        <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex justify-between items-center">
+          <div>
+            <p class="text-slate-500 text-sm font-semibold">إجمالي مستحقاتك المالية المتراكمة (بعد خصم نسبة المنصة)</p>
+            <h3 class="text-3xl font-bold text-emerald-600 mt-1" x-text="getDriverEarnedTotal() + ' ر.س'"></h3>
+          </div>
+          <div class="p-4 bg-emerald-50 text-emerald-600 rounded-2xl"><i class="fa-solid fa-wallet text-2xl"></i></div>
+        </div>
+
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+          <div class="p-5 border-b border-slate-50"><h3 class="font-bold text-slate-800">أرشيف الشحنات الناجحة</h3></div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-right text-sm">
+              <thead class="bg-slate-50 text-slate-500 border-b">
+                <tr>
+                  <th class="p-4">الرقم</th>
+                  <th class="p-4">العميل</th>
+                  <th class="p-4">تاريخ التوصيل</th>
+                  <th class="p-4">الرسوم المستلمة للمنصة</th>
+                  <th class="p-4">حصتك الصافية</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-100">
+                <template x-for="order in getDriverDeliveredOrders()" :key="order.OrderID">
+                  <tr>
+                    <td class="p-4 font-semibold text-indigo-600" x-text="order.OrderID"></td>
+                    <td class="p-4" x-text="order.CustomerName"></td>
+                    <td class="p-4" x-text="formatDate(order.CreatedAt)"></td>
+                    <td class="p-4" x-text="order.DeliveryFee + ' ر.س'"></td>
+                    <td class="p-4 font-bold text-emerald-600" x-text="calculateDriverPayout(order.DeliveryFee) + ' ر.س'"></td>
+                  </tr>
+                </template>
+                <tr x-show="getDriverDeliveredOrders().length === 0">
+                  <td colspan="5" class="p-8 text-center text-slate-400">لم تقم بتسليم أي طلبات بنجاح بعد.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+    </main>
+  </div>
+
+  <!-- مودال تسجيل مندوب جديد -->
+  <div x-show="showAddDriverModal" class="fixed inset-0 bg-slate-900/50 flex items-center justify-center p-4 z-[2000]" x-cloak>
+    <div class="bg-white rounded-2xl shadow-2xl max-w-lg w-full p-6 md:p-8 border border-slate-100 space-y-6">
+      <div class="flex justify-between items-center border-b pb-4">
+        <h3 class="text-xl font-bold text-slate-900">تسجيل حساب مندوب جديد في المنصة</h3>
+        <button @click="showAddDriverModal = false" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
+      </div>
+
+      <form @submit.prevent="createDriver" class="space-y-4">
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">اسم المندوب</label>
+            <input type="text" x-model="newDriverForm.name" required class="w-full px-3 py-2 bg-slate-50 border rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500 text-sm">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">منطقة التغطية الجغرافية</label>
+            <input type="text" x-model="newDriverForm.zone" placeholder="مثال: الرياض - الشمال" required class="w-full px-3 py-2 bg-slate-50 border rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500 text-sm">
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">رقم الهاتف الجوال</label>
+            <input type="text" x-model="newDriverForm.phone" required class="w-full px-3 py-2 bg-slate-50 border rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500 text-sm">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">البريد الإلكتروني</label>
+            <input type="email" x-model="newDriverForm.email" required class="w-full px-3 py-2 bg-slate-50 border rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500 text-sm">
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-4 border-t pt-4">
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">اسم مستخدم للنظام</label>
+            <input type="text" x-model="newDriverForm.username" required class="w-full px-3 py-2 bg-slate-50 border rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500 text-sm">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">كلمة المرور المؤقتة</label>
+            <input type="password" x-model="newDriverForm.password" required class="w-full px-3 py-2 bg-slate-50 border rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500 text-sm">
+          </div>
+        </div>
+
+        <button type="submit" class="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-xl transition mt-4">تسجيل وإتاحة تسجيل الدخول</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- مودال اختيار وتحديد الموقع الجغرافي المباشر من الخريطة للطلب -->
+  <div x-show="showMapPicker" class="fixed inset-0 bg-slate-900/50 flex items-center justify-center p-4 z-[2000]" x-cloak>
+    <div class="bg-white rounded-2xl shadow-2xl max-w-3xl w-full p-6 border border-slate-100 space-y-4">
+      <div class="flex justify-between items-center">
+        <h3 class="font-bold text-slate-900" x-text="mapPickerTarget === 'customer' ? 'تحديد إحداثيات موقع العميل' : 'تحديد إحداثيات موقع المتجر'"></h3>
+        <button @click="showMapPicker = false" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div id="map-picker" class="w-full h-[350px] md:h-[400px] rounded-xl bg-slate-100"></div>
+      <div class="flex justify-between items-center text-xs text-slate-500">
+        <span>انقر على الخريطة لوضع العلامة وتحديد الموقع بدقة.</span>
+        <button @click="confirmMapPicker" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-bold transition">اعتماد الإحداثيات المحددة</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // تسجيل الـ Service Worker لتفعيل الـ PWA
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('sw.js')
+          .then(reg => console.log('تم تسجيل Service Worker بنجاح', reg))
+          .catch(err => console.error('فشل تسجيل Service Worker', err));
+      });
+    }
+
+    // ==========================================
+    // تهيئة المتغيرات الأساسية وعناوين الخوادم
+    // ==========================================
+    const GAS_API_URL = "https://script.google.com/macros/s/AKfycbwx639PIXdl3VTQG0mz_73hrEYs3Hd3ZWzI4JJICKFnJiUBsz1LfAS5kCwff0LvUbuCUg/exec"; // استبدله برابط النشر الخاص بـ Google Apps Script
+
+    function logisticsApp() {
+      return {
+        isLoggedIn: false,
+        userRole: '',
+        username: '',
+        driverId: '',
+        activeTab: 'dashboard',
+        loading: false,
+        
+        // البيانات الرئيسية
+        orders: [],
+        drivers: [],
+        stats: { total: 0, pending: 0, transit: 0, delivered: 0, failed: 0 },
+        settings: { commission: 15 },
+        broadcastMessage: '',
+        
+        // كائنات خرائط Leaflet والمؤشرات
+        managerMap: null,
+        managerMarkers: [],
+        pickerMap: null,
+        pickerMarker: null,
+        pickerCoordinates: null,
+        showMapPicker: false,
+        mapPickerTarget: 'customer',
+        
+        // الفلاتر
+        reportFilter: { status: 'all', startDate: '', endDate: '' },
+        
+        // النطاقات والنظام الجغرافي للمندوب
+        driverLocation: { lat: null, lng: null },
+        locationWatchId: null,
+        currentDriverOrder: null,
+        
+        // نماذج المدخلات والبيانات
+        loginForm: { username: '', password: '' },
+        orderForm: { customerName: '', customerPhone: '', customerLocation: '', storeLocation: '', deliveryFee: 20, paymentStatus: 'Paid', codAmount: 0 },
+        newDriverForm: { name: '', phone: '', email: '', zone: '', username: '', password: '' },
+        showAddDriverModal: false,
+
+        init() {
+          const savedUser = localStorage.getItem('logisticsUser');
+          if (savedUser) {
+            const data = JSON.parse(savedUser);
+            this.isLoggedIn = true;
+            this.userRole = data.role;
+            this.username = data.username;
+            this.driverId = data.driverId;
+            this.activeTab = (this.userRole === 'Manager') ? 'dashboard' : 'driver-new';
+            this.fetchData();
+            if (this.userRole === 'Driver') {
+              this.startDriverTracking();
+            }
+          }
+          // تحديث نسبي مستمر للوقت
+          setInterval(() => {
+            if (this.activeTab === 'map' && this.managerMap) {
+              this.updateMaps();
+            }
+          }, 15000);
+        },
+
+        // استدعاء البيانات الشامل من الخادم والسحاب
+        async fetchData() {
+          if (!this.isLoggedIn) return;
+          this.loading = true;
+          try {
+            const ordersRes = await this.apiCall({ action: 'getOrders' });
+            if (ordersRes.success) this.orders = ordersRes.orders;
+
+            const driversRes = await this.apiCall({ action: 'getDrivers' });
+            if (driversRes.success) this.drivers = driversRes.drivers;
+
+            const statsRes = await this.apiCall({ action: 'getDashboardStats' });
+            if (statsRes.success) this.stats = statsRes.stats;
+
+            const settingsRes = await this.apiCall({ action: 'getSettings' });
+            if (settingsRes.success) this.settings.commission = settingsRes.commission;
+
+            if (this.userRole === 'Driver') {
+              this.currentDriverOrder = this.orders.find(o => o.AssignedDriverID.toString() === this.driverId.toString() && o.Status === 'In Transit') || null;
+            }
+
+            this.updateMaps();
+
+          } catch (e) {
+            console.error(e);
+          } finally {
+            this.loading = false;
+          }
+        },
+
+        // طلبات البرمجة الوسيطة مع السحاب (Google Apps Script API Gateway)
+        async apiCall(payload) {
+          const response = await fetch(GAS_API_URL, {
+            method: 'POST',
+            body: JSON.stringify(payload),
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' }
+          });
+          return await response.json();
+        },
+
+        // تسجيل الدخول والتحقق
+        async login() {
+          this.loading = true;
+          try {
+            const res = await this.apiCall({
+              action: 'login',
+              username: this.loginForm.username,
+              password: this.loginForm.password
+            });
+            if (res.success) {
+              this.isLoggedIn = true;
+              this.userRole = res.user.role;
+              this.username = res.user.username;
+              this.driverId = res.user.driverId;
+              localStorage.setItem('logisticsUser', JSON.stringify(res.user));
+              this.activeTab = (this.userRole === 'Manager') ? 'dashboard' : 'driver-new';
+              this.fetchData();
+              if (this.userRole === 'Driver') {
+                this.startDriverTracking();
+              }
+            } else {
+              alert(res.message);
+            }
+          } catch (e) {
+            alert('فشل الاتصال بالخادم السحابي.');
+          } finally {
+            this.loading = false;
+          }
+        },
+
+        logout() {
+          if (this.locationWatchId) {
+            navigator.geolocation.clearWatch(this.locationWatchId);
+          }
+          localStorage.removeItem('logisticsUser');
+          this.isLoggedIn = false;
+          this.userRole = '';
+          this.username = '';
+          this.driverId = '';
+          this.activeTab = 'dashboard';
+        },
+
+        // إدارة التبويبات والصفحات
+        switchTab(tab) {
+          this.activeTab = tab;
+          this.$nextTick(() => {
+            this.updateMaps();
+          });
+        },
+
+        // تفعيل الخرائط النشطة
+        updateMaps() {
+          if (this.activeTab === 'map') {
+            this.initManagerMap();
+          }
+        },
+
+        // صيغة الحساب لآخر نشاط للمندوب بشكل نسبي
+        timeAgo(dateStr) {
+          if (!dateStr) return 'لم ينشط بعد';
+          const now = new Date();
+          const past = new Date(dateStr);
+          const diffMs = now - past;
+          const diffSec = Math.floor(diffMs / 1000);
+          if (diffSec < 10) return 'الآن';
+          if (diffSec < 60) return `منذ ${diffSec} ثانية`;
+          const diffMin = Math.floor(diffSec / 60);
+          if (diffMin < 60) return `منذ ${diffMin} دقيقة`;
+          const diffHr = Math.floor(diffMin / 60);
+          if (diffHr < 24) return `منذ ${diffHr} ساعة`;
+          return `منذ ${Math.floor(diffHr / 24)} يوم`;
+        },
+
+        // ==========================================
+        // خريطة تتبع المناديب ومواقع العملاء للمدير (Leaflet)
+        // ==========================================
+        initManagerMap() {
+          const centerPos = [24.7136, 46.6753]; // الرياض موقع افتراضي
+          
+          if (!this.managerMap) {
+            this.managerMap = L.map('map-manager').setView(centerPos, 11);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+              attribution: '&copy; OpenStreetMap contributors'
+            }).addTo(this.managerMap);
+          }
+
+          this.managerMarkers.forEach(m => this.managerMap.removeLayer(m));
+          this.managerMarkers = [];
+
+          const bounds = [];
+
+          const driverIcon = L.divIcon({
+            html: `<div class="bg-indigo-600 text-white rounded-full border-2 border-white shadow-lg flex items-center justify-center" style="width: 32px; height: 32px;"><i class="fa-solid fa-motorcycle text-xs"></i></div>`,
+            className: 'custom-div-icon',
+            iconSize: [32, 32],
+            iconAnchor: [16, 32],
+            popupAnchor: [0, -32]
+          });
+
+          const customerIcon = L.divIcon({
+            html: `<div class="bg-rose-500 text-white rounded-full border-2 border-white shadow-lg flex items-center justify-center" style="width: 32px; height: 32px;"><i class="fa-solid fa-user text-xs"></i></div>`,
+            className: 'custom-div-icon',
+            iconSize: [32, 32],
+            iconAnchor: [16, 32],
+            popupAnchor: [0, -32]
+          });
+
+          this.drivers.forEach(d => {
+            if (d.lat && d.lng) {
+              const pos = [parseFloat(d.lat), parseFloat(d.lng)];
+              bounds.push(pos);
+
+              const marker = L.marker(pos, { icon: driverIcon }).addTo(this.managerMap);
+              marker.bindPopup(`
+                <div style="text-align:right; font-family:'Cairo';">
+                  <h4 style="font-weight:bold; margin-bottom:4px; color:#4f46e5;">المندوب: ${d.name}</h4>
+                  <p style="font-size:11px; margin:0 0 5px 0;">الجوال: ${d.phone}</p>
+                  <p style="font-size:11px; margin:0 0 5px 0;">النطاق: ${d.zone}</p>
+                  <p style="font-size:11px; margin:0 0 5px 0; color: #10b981;">المسلمات: ${d.stats.delivered}</p>
+                  <p style="font-size:11px; margin:0 0 5px 0; color: #64748b;">آخر نشاط: ${this.timeAgo(d.lastActive)}</p>
+                </div>
+              `);
+              this.managerMarkers.push(marker);
+            }
+          });
+
+          this.orders.forEach(o => {
+            if (o.CustomerLat && o.CustomerLng && (o.Status === 'Pending' || o.Status === 'In Transit' || o.Status === 'Pending Cancellation')) {
+              const pos = [parseFloat(o.CustomerLat), parseFloat(o.CustomerLng)];
+              bounds.push(pos);
+
+              const marker = L.marker(pos, { icon: customerIcon }).addTo(this.managerMap);
+              marker.bindPopup(`
+                <div style="text-align:right; font-family:'Cairo'; min-width: 150px;">
+                  <h4 style="font-weight:bold; margin-bottom:4px; color:#e11d48;">العميل: ${o.CustomerName}</h4>
+                  <p style="font-size:11px; margin:0 0 5px 0;">رقم الشحنة: ${o.OrderID}</p>
+                  <p style="font-size:11px; margin:0 0 5px 0;">الحالة: ${this.formatStatus(o.Status)}</p>
+                  <p style="font-size:11px; margin:0 0 8px 0;">الرسوم: ${o.DeliveryFee} ر.س</p>
+                  <div style="display:flex; gap:5px; border-t: 1px solid #f1f5f9; padding-top:6px;">
+                    <a href="${this.formatPhoneForCall(o.CustomerPhone)}" style="padding:4px 8px; background:#eff6ff; color:#2563eb; text-decoration:none; border-radius:4px; font-size:10px; font-weight:bold;"><i class="fa-solid fa-phone"></i> اتصال</a>
+                    <a href="${this.formatPhoneForWhatsApp(o.CustomerPhone)}" target="_blank" style="padding:4px 8px; background:#ecfdf5; color:#059669; text-decoration:none; border-radius:4px; font-size:10px; font-weight:bold;"><i class="fa-brands fa-whatsapp"></i> واتساب</a>
+                  </div>
+                </div>
+              `);
+              this.managerMarkers.push(marker);
+            }
+          });
+
+          if (bounds.length > 0) {
+            this.managerMap.fitBounds(L.latLngBounds(bounds), { padding: [40, 40] });
+          } else {
+            this.managerMap.setView(centerPos, 11);
+          }
+
+          setTimeout(() => { this.managerMap.invalidateSize(); }, 150);
+        },
+
+        // تفعيل تتبع الموقع الجغرافي للمندوب دورياً
+        startDriverTracking() {
+          if (navigator.geolocation) {
+            this.locationWatchId = navigator.geolocation.watchPosition(
+              (position) => {
+                this.driverLocation.lat = position.coords.latitude;
+                this.driverLocation.lng = position.coords.longitude;
+                this.apiCall({
+                  action: 'updateDriverLocation',
+                  driverId: this.driverId,
+                  lat: this.driverLocation.lat,
+                  lng: this.driverLocation.lng
+                });
+              },
+              (err) => console.error(err),
+              { enableHighAccuracy: true, timeout: 15000, maximumAge: 10000 }
+            );
+          }
+        },
+
+        // معالجة الأرقام للاتصال وواتساب
+        formatPhoneForCall(phone) {
+          if (!phone) return '#';
+          let cleaned = phone.toString().replace(/\D/g, '');
+          if (cleaned.startsWith('5')) {
+            cleaned = '0' + cleaned;
+          }
+          return 'tel:' + cleaned;
+        },
+
+        formatPhoneForWhatsApp(phone) {
+          if (!phone) return '#';
+          let cleaned = phone.toString().replace(/\D/g, '');
+          if (cleaned.startsWith('05')) {
+            cleaned = '966' + cleaned.substring(1);
+          } else if (cleaned.startsWith('5')) {
+            cleaned = '966' + cleaned;
+          }
+          return 'https://wa.me/' + cleaned;
+        },
+
+        // التصفية والتحقق من طلبات إلغاء تعذر التسليم (للمدير)
+        getPendingCancellationOrders() {
+          return this.orders.filter(o => o.Status === 'Pending Cancellation');
+        },
+
+        // موافقة المدير على تعذر التوصيل
+        async approveCancellation(orderId, reason) {
+          this.loading = true;
+          try {
+            const res = await this.apiCall({ action: 'updateOrderStatus', orderId: orderId, status: 'Failed', reason: reason });
+            if (res.success) {
+              alert('تم تأكيد إلغاء الشحنة بنجاح وتحويل حالتها إلى متعثرة.');
+              this.fetchData();
+            }
+          } catch (e) {
+            alert('فشل تسجيل العملية.');
+          } finally {
+            this.loading = false;
+          }
+        },
+
+        // رفض المدير للإلغاء والزام المندوب بإعادة المحاولة
+        async rejectCancellation(orderId) {
+          this.loading = true;
+          try {
+            const res = await this.apiCall({ action: 'updateOrderStatus', orderId: orderId, status: 'In Transit', reason: '' });
+            if (res.success) {
+              alert('تم رفض الإلغاء وإعادة تفعيل الشحنة في عهدة المندوب لإعادة محاولة التسليم.');
+              this.fetchData();
+            }
+          } catch (e) {
+            alert('فشل الإجراء.');
+          } finally {
+            this.loading = false;
+          }
+        },
+
+        // طلب إلغاء من المندوب بدلاً من الإلغاء المباشر
+        promptFailedOrderApproval(orderId) {
+          const reason = prompt('يرجى كتابة سبب تعذر التسليم لإرساله للمدير للمراجعة وتأكيد الإلغاء:');
+          if (reason) {
+            this.updateOrderStatus(orderId, 'Pending Cancellation', reason);
+          }
+        },
+
+        // ==========================================
+        // منشئ ومستعرض منتقي المواقع للطلب اللوجستي
+        // ==========================================
+        pickLocation(target) {
+          this.mapPickerTarget = target;
+          this.showMapPicker = true;
+          const centerPos = [24.7136, 46.6753];
+
+          this.$nextTick(() => {
+            if (!this.pickerMap) {
+              this.pickerMap = L.map('map-picker').setView(centerPos, 11);
+              L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '&copy; OpenStreetMap contributors'
+              }).addTo(this.pickerMap);
+
+              this.pickerMap.on('click', (e) => {
+                this.pickerCoordinates = e.latlng;
+                if (this.pickerMarker) {
+                  this.pickerMarker.setLatLng(e.latlng);
+                } else {
+                  this.pickerMarker = L.marker(e.latlng).addTo(this.pickerMap);
+                }
+              });
+            } else {
+              this.pickerMap.setView(centerPos, 11);
+            }
+
+            if (this.pickerMarker) {
+              this.pickerMap.removeLayer(this.pickerMarker);
+              this.pickerMarker = null;
+            }
+            this.pickerCoordinates = null;
+
+            setTimeout(() => { this.pickerMap.invalidateSize(); }, 200);
+          });
+        },
+
+        confirmMapPicker() {
+          if (this.pickerCoordinates) {
+            const formatted = `${this.pickerCoordinates.lat.toFixed(6)}, ${this.pickerCoordinates.lng.toFixed(6)}`;
+            if (this.mapPickerTarget === 'customer') {
+              this.orderForm.customerLocation = formatted;
+            } else {
+              this.orderForm.storeLocation = formatted;
+            }
+          }
+          this.showMapPicker = false;
+          if (this.pickerMarker && this.pickerMap) {
+            this.pickerMap.removeLayer(this.pickerMarker);
+            this.pickerMarker = null;
+          }
+          this.pickerCoordinates = null;
+        },
+
+        // ==========================================
+        // وظائف وقواعد معالجة الطلبات العامة
+        // ==========================================
+        async createOrder() {
+          this.loading = true;
+          
+          let cLat = "", cLng = "";
+          if (this.orderForm.customerLocation) {
+            const parts = this.orderForm.customerLocation.split(',');
+            cLat = parts[0].trim();
+            cLng = parts[1].trim();
+          }
+
+          let sLat = "", sLng = "";
+          if (this.orderForm.storeLocation) {
+            const parts = this.orderForm.storeLocation.split(',');
+            sLat = parts[0].trim();
+            sLng = parts[1].trim();
+          }
+
+          try {
+            const res = await this.apiCall({
+              action: 'createOrder',
+              customerName: this.orderForm.customerName,
+              customerPhone: this.orderForm.customerPhone,
+              customerLat: cLat,
+              customerLng: cLng,
+              storeLat: sLat,
+              storeLng: sLng,
+              deliveryFee: parseFloat(this.orderForm.deliveryFee),
+              paymentStatus: this.orderForm.paymentStatus,
+              codAmount: parseFloat(this.orderForm.codAmount || 0)
+            });
+
+            if (res.success) {
+              alert('تم تسجيل وتوزيع الشحنة بنجاح في المنصة.');
+              this.orderForm = { customerName: '', customerPhone: '', customerLocation: '', storeLocation: '', deliveryFee: 20, paymentStatus: 'Paid', codAmount: 0 };
+              this.activeTab = 'dashboard';
+              this.fetchData();
+            }
+          } catch (e) {
+            alert('حدث خطأ أثناء الاتصال بالخادم.');
+          } finally {
+            this.loading = false;
+          }
+        },
+
+        async createDriver() {
+          this.loading = true;
+          try {
+            const res = await this.apiCall({
+              action: 'createDriver',
+              name: this.newDriverForm.name,
+              phone: this.newDriverForm.phone,
+              email: this.newDriverForm.email,
+              zone: this.newDriverForm.zone,
+              username: this.newDriverForm.username,
+              password: this.newDriverForm.password
+            });
+            if (res.success) {
+              alert('تم تسجيل المندوب بنجاح وتهيئة حساب الدخول الخاص به.');
+              this.showAddDriverModal = false;
+              this.newDriverForm = { name: '', phone: '', email: '', zone: '', username: '', password: '' };
+              this.fetchData();
+            } else {
+              alert(res.message);
+            }
+          } catch (e) {
+            alert('فشل حفظ المندوب.');
+          } finally {
+            this.loading = false;
+          }
+        },
+
+        async toggleDriverStatus(driverId, currentStatus) {
+          const nextStatus = currentStatus === 'Active' ? 'Inactive' : 'Active';
+          this.loading = true;
+          try {
+            const res = await this.apiCall({ action: 'updateDriverStatus', driverId: driverId, status: nextStatus });
+            if (res.success) {
+              this.fetchData();
+            }
+          } catch (e) {
+            alert('تعذر تحديث حالة الحساب.');
+          } finally {
+            this.loading = false;
+          }
+        },
+
+        async assignOrderDirectly(orderId, driverId) {
+          if (!driverId) return;
+          this.loading = true;
+          try {
+            const res = await this.apiCall({ action: 'assignOrder', orderId: orderId, driverId: driverId });
+            if (res.success) {
+              alert('تم تعيين الشحنة بنجاح وبدء المتابعة.');
+              this.fetchData();
+            }
+          } catch (e) {
+            alert('فشل إسناد الشحنة.');
+          } finally {
+            this.loading = false;
+          }
+        },
+
+        // ==========================================
+        // وظائف المندوب - الحسابات والمسافات الجغرافية
+        // ==========================================
+        getNearbyOrders() {
+          if (this.userRole !== 'Driver') return [];
+          const list = [];
+          this.orders.forEach(o => {
+            if (o.Status === 'Pending' && (!o.AssignedDriverID || o.AssignedDriverID === "")) {
+              let custDist = null;
+              let storeDist = null;
+              
+              if (this.driverLocation.lat && o.CustomerLat && o.CustomerLng) {
+                custDist = this.haversineDistance(
+                  this.driverLocation.lat, this.driverLocation.lng,
+                  parseFloat(o.CustomerLat), parseFloat(o.CustomerLng)
+                );
+              }
+              if (this.driverLocation.lat && o.StoreLat && o.StoreLng) {
+                storeDist = this.haversineDistance(
+                  this.driverLocation.lat, this.driverLocation.lng,
+                  parseFloat(o.StoreLat), parseFloat(o.StoreLng)
+                );
+              }
+
+              if (custDist !== null && custDist <= 20) {
+                list.push({
+                  ...o,
+                  customerDistance: custDist,
+                  storeDistance: storeDist
+                });
+              }
+            }
+          });
+          return list.sort((a, b) => a.customerDistance - b.customerDistance);
+        },
+
+        async driverAcceptOrder(orderId) {
+          this.loading = true;
+          try {
+            const res = await this.apiCall({ action: 'driverAcceptOrder', orderId: orderId, driverId: this.driverId });
+            if (res.success) {
+              alert('تم قبول المهمة بنجاح، بالتوفيق في رحلتك.');
+              this.activeTab = 'driver-current';
+              this.fetchData();
+            } else {
+              alert(res.message);
+            }
+          } catch (e) {
+            alert('فشل قبول المهمة.');
+          } finally {
+            this.loading = false;
+          }
+        },
+
+        async updateOrderStatus(orderId, status, reason = '') {
+          this.loading = true;
+          try {
+            const res = await this.apiCall({ action: 'updateOrderStatus', orderId: orderId, status: status, reason: reason });
+            if (res.success) {
+              if (status === 'Pending Cancellation') {
+                alert('تم إرسال طلب إلغاء تعذر التسليم للإدارة بنجاح. يرجى الانتظار لحين تأكيد الطلب.');
+              } else {
+                alert('تم التحديث وحفظ الحالة الفورية.');
+              }
+              this.activeTab = (status === 'Delivered') ? 'driver-delivered' : 'driver-new';
+              this.fetchData();
+            }
+          } catch (e) {
+            alert('فشل تواصل الإجراء مع السحاب.');
+          } finally {
+            this.loading = false;
+          }
+        },
+
+        getDriverDeliveredOrders() {
+          return this.orders.filter(o => o.AssignedDriverID.toString() === this.driverId.toString() && o.Status === 'Delivered');
+        },
+
+        getDriverEarnedTotal() {
+          const delivered = this.getDriverDeliveredOrders();
+          const rawTotal = delivered.reduce((acc, curr) => acc + parseFloat(curr.DeliveryFee || 0), 0);
+          return this.calculateDriverPayout(rawTotal);
+        },
+
+        // ==========================================
+        // الحسابات المساعدة وصيغ العرض التجميلية
+        // ==========================================
+        calculateDriverPayout(fee) {
+          const rawFee = parseFloat(fee || 0);
+          const managerCut = (rawFee * parseFloat(this.settings.commission)) / 100;
+          return (rawFee - managerCut).toFixed(2);
+        },
+
+        haversineDistance(lat1, lon1, lat2, lon2) {
+          const R = 6371; // نصف قطر الأرض بالكيلومتر
+          const dLat = (lat2 - lat1) * Math.PI / 180;
+          const dLon = (lon2 - lon1) * Math.PI / 180;
+          const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                    Math.sin(dLon/2) * Math.sin(dLon/2);
+          const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+          return R * c;
+        },
+
+        getStatusBadgeClass(status) {
+          if (status === 'Pending') return 'bg-amber-50 text-amber-600';
+          if (status === 'In Transit') return 'bg-blue-50 text-blue-600';
+          if (status === 'Pending Cancellation') return 'bg-rose-100 text-rose-700 animate-pulse';
+          if (status === 'Delivered') return 'bg-emerald-50 text-emerald-600';
+          if (status === 'Failed') return 'bg-rose-50 text-rose-600';
+          return 'bg-slate-50 text-slate-600';
+        },
+
+        formatStatus(status) {
+          if (status === 'Pending') return 'قيد الانتظار';
+          if (status === 'In Transit') return 'قيد التوصيل';
+          if (status === 'Pending Cancellation') return 'بانتظار تأكيد الإلغاء';
+          if (status === 'Delivered') return 'تم التسليم';
+          if (status === 'Failed') return 'متعثر ومُلغى';
+          return status;
+        },
+
+        formatDate(dateStr) {
+          if (!dateStr) return '';
+          const d = new Date(dateStr);
+          return d.toLocaleDateString('ar-SA', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+        },
+
+        getDriverName(driverId) {
+          if (!driverId) return 'غير مسند';
+          const d = this.drivers.find(drv => drv.driverId.toString() === driverId.toString());
+          return d ? d.name : 'غير مسند';
+        },
+
+        getUnassignedOrders() {
+          return this.orders.filter(o => o.Status === 'Pending' && (!o.AssignedDriverID || o.AssignedDriverID === ''));
+        },
+
+        getActiveDrivers() {
+          return this.drivers.filter(d => d.status === 'Active');
+        },
+
+        // ==========================================
+        // وظائف فلاتر التقارير وتصدير CSV
+        // ==========================================
+        getFilteredOrders() {
+          return this.orders.filter(o => {
+            const statusMatch = this.reportFilter.status === 'all' || o.Status === this.reportFilter.status;
+            
+            let dateMatch = true;
+            if (o.CreatedAt) {
+              const orderDate = new Date(o.CreatedAt).getTime();
+              if (this.reportFilter.startDate) {
+                const sDate = new Date(this.reportFilter.startDate).getTime();
+                if (orderDate < sDate) dateMatch = false;
+              }
+              if (this.reportFilter.endDate) {
+                const eDate = new Date(this.reportFilter.endDate).getTime();
+                if (orderDate > eDate) dateMatch = false;
+              }
+            }
+            return statusMatch && dateMatch;
+          });
+        },
+
+        resetReportFilters() {
+          this.reportFilter = { status: 'all', startDate: '', endDate: '' };
+        },
+
+        exportToCSV() {
+          const list = this.getFilteredOrders();
+          if (list.length === 0) return alert('لا توجد بيانات لتصديرها.');
+          
+          let csvContent = "data:text/csv;charset=utf-8,\uFEFF";
+          csvContent += "رقم الشحنة,اسم العميل,الهاتف,المندوب,تاريخ الطلب,الرسوم,الحالة,السبب إن وجد\r\n";
+          
+          list.forEach(o => {
+            const driver = this.getDriverName(o.AssignedDriverID);
+            const status = this.formatStatus(o.Status);
+            const row = `"${o.OrderID}","${o.CustomerName}","${o.CustomerPhone}","${driver}","${new Date(o.CreatedAt).toLocaleDateString('ar-SA')}","${o.DeliveryFee}","${status}","${o.ReasonForFailure || ''}"`;
+            csvContent += row + "\r\n";
+          });
+          
+          const encodedUri = encodeURI(csvContent);
+          const link = document.createElement("a");
+          link.setAttribute("href", encodedUri);
+          link.setAttribute("download", `تقرير_الشحنات_${new Date().toISOString().slice(0,10)}.csv`);
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+        },
+
+        // إرسال الإعدادات وتخصيص نسبة الشركة
+        async saveSettings() {
+          this.loading = true;
+          try {
+            const res = await this.apiCall({ action: 'updateSettings', commission: parseFloat(this.settings.commission) });
+            if (res.success) {
+              alert('تم حفظ نسبة الشركة وتحديث النظام المالي.');
+              this.fetchData();
+            }
+          } catch (e) {
+            alert('فشل تعديل الإعدادات.');
+          } finally {
+            this.loading = false;
+          }
+        },
+
+        sendBroadcast() {
+          if (!this.broadcastMessage.trim()) return;
+          alert('تم بث الإعلان ونشر التعميم لجميع المناديب النشطين.');
+          this.broadcastMessage = '';
+        }
+      };
+    }
+  </script>
+</body>
+</html>
