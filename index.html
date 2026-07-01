@@ -2,6 +2,7 @@
 <html lang="ar" dir="rtl">
 <head>
   <meta charset="UTF-8">
+  <!-- قفل ميزة التكبير والتصغير لمنح تجربة تطبيق متكاملة للهواتف -->
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <meta name="theme-color" content="#4f46e5" />
   <title>نظام إدارة العمليات اللوجستية</title>
@@ -227,6 +228,22 @@
     <!-- مساحة المحتوى الرئيسية -->
     <main class="flex-1 p-4 md:p-10 overflow-y-auto relative">
 
+      <!-- بنر طلب تفعيل الإشعارات الفورية بناء على إيماءة المستخدم (شرط أساسي لآيفون وأندرويد) -->
+      <div x-show="isLoggedIn && showNotificationPrompt" class="bg-indigo-50 border border-indigo-200 p-4 rounded-2xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 shadow-sm" x-cloak>
+        <div class="flex items-center space-x-3 space-x-reverse">
+          <div class="p-2.5 bg-indigo-600 text-white rounded-xl">
+            <i class="fa-solid fa-bell text-lg animate-bounce"></i>
+          </div>
+          <div>
+            <h4 class="font-bold text-slate-900 text-sm">تفعيل تنبيهات النظام للهاتف</h4>
+            <p class="text-xs text-slate-500 mt-0.5">يرجى الضغط على زر التفعيل ومنح الإذن لكي يتمكن التطبيق من إرسال إشعارات فورية مع رنين للهاتف حتى عند إغلاق التطبيق.</p>
+          </div>
+        </div>
+        <button @click="requestNotificationPermission()" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-md transition whitespace-nowrap">
+          تفعيل الإشعارات الآن
+        </button>
+      </div>
+
       <!-- ==================== شاشات المدير ==================== -->
 
       <!-- 1. لوحة التحكم الرئيسية للمدير -->
@@ -431,7 +448,7 @@
                 <tr>
                   <th class="p-4">اسم المندوب</th>
                   <th class="p-4">الجوال والبريد</th>
-                  <th class="p-4">النطاف الجغرافي</th>
+                  <th class="p-4">النطاق الجغرافي</th>
                   <th class="p-4">إحصائيات الطلبات</th>
                   <th class="p-4">رسوم مستحقة</th>
                   <th class="p-4">الحالة</th>
@@ -693,7 +710,7 @@
                 </div>
 
                 <div class="pt-2">
-                  <a :href="'https://www.google.com/maps/search/?api=1&query=' + currentDriverOrder.CustomerLat + ',' + currentDriverOrder.CustomerLng" target="_blank" class="text-indigo-600 hover:underline font-bold text-xs flex items-center space-x-1 space-x-reverse">
+                  <a :href="'https://www.google.com/maps/search/?api=1&query=' + currentDriverOrder.CustomerLat + ',' + currentDriverOrder.CustomerLng" target="_blank" class="text-indigo-600 hover:underline font-bold text-xs flex items-center space-x-1.5 space-x-reverse">
                     <i class="fa-solid fa-diamond-turn-right"></i><span>افتح التوجيه في خرائط جوجل الخارجية</span>
                   </a>
                 </div>
@@ -838,15 +855,6 @@
   </div>
 
   <script>
-    // تسجيل الـ Service Worker لتفعيل الـ PWA
-    if ('serviceWorker' in navigator) {
-      window.addEventListener('load', () => {
-        navigator.serviceWorker.register('sw.js')
-          .then(reg => console.log('تم تسجيل Service Worker بنجاح', reg))
-          .catch(err => console.error('فشل تسجيل Service Worker', err));
-      });
-    }
-
     // ==========================================
     // تهيئة المتغيرات الأساسية وعناوين الخوادم
     // ==========================================
@@ -861,7 +869,8 @@
         activeTab: 'dashboard',
         loading: false,
         
-        // نظام التنبيهات المرئية والصوتية
+        // نظام إدارة بنر طلب الصلاحية عبر إيماءة المستخدم
+        showNotificationPrompt: false,
         toasts: [],
         
         // البيانات الرئيسية
@@ -908,7 +917,9 @@
               this.startDriverTracking();
             }
           }
-          this.requestNotificationPermission();
+          
+          // التحقق من صلاحية التنبيهات وإظهار البنر في حال عدم تفعيلها بعد
+          this.checkNotificationStatus();
 
           // التحديث التلقائي الفوري الصامت كل 12 ثانية بدون تجميد الصفحة
           setInterval(() => {
@@ -916,6 +927,36 @@
               this.fetchData(true);
             }
           }, 12000);
+        },
+
+        // التحقق من حالة الصلاحية لعرض بنر التفعيل التفاعلي
+        checkNotificationStatus() {
+          if ("Notification" in window) {
+            if (Notification.permission === "default") {
+              this.showNotificationPrompt = true;
+            } else {
+              this.showNotificationPrompt = false;
+            }
+          }
+        },
+
+        // طلب الصلاحية رسمياً عند نقر المستخدم على زر التنشيط
+        requestNotificationPermission() {
+          if ("Notification" in window) {
+            Notification.requestPermission().then(permission => {
+              if (permission === "granted") {
+                this.showNotificationPrompt = false;
+                this.showToast('تم تفعيل التنبيهات الفورية بنجاح!', 'success');
+                this.playNotificationSound();
+                this.triggerSystemNotification("تهانينا!", "لقد قمت بتفعيل الإشعارات بنجاح على هذا الهاتف.");
+              } else if (permission === "denied") {
+                this.showNotificationPrompt = false;
+                this.showToast('تم رفض صلاحية الإشعارات. يرجى تفعيلها يدوياً من إعدادات الهاتف.', 'error');
+              }
+            });
+          } else {
+            alert('نظام التشغيل أو المتصفح الحالي لا يدعم ميزة التنبيهات الفورية بنظام PWA. يرجى التأكد من إضافة التطبيق إلى الشاشة الرئيسية أولاً.');
+          }
         },
 
         // إشعار فوري وتنبيه مرئي باستخدام مكتبة Toastify المتكاملة للهواتف
@@ -936,17 +977,6 @@
           }).showToast();
         },
 
-        // طلب صلاحيات الإشعارات من المتصفح لضمان تفعيلها
-        requestNotificationPermission() {
-          if ("Notification" in window) {
-            Notification.requestPermission().then(permission => {
-              if (permission === "granted") {
-                console.log("صلاحية الإشعارات ممنوحة");
-              }
-            });
-          }
-        },
-
         // تشغيل صوت رنين للتنبيهات الفورية
         playNotificationSound() {
           const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-600.wav');
@@ -963,7 +993,11 @@
                   icon: 'https://placehold.co/192x192/4f46e5/ffffff?text=Cargo',
                   vibrate: [200, 100, 200]
                 });
+              }).catch(() => {
+                new Notification(title, { body: body });
               });
+            } else {
+              new Notification(title, { body: body });
             }
           }
         },
