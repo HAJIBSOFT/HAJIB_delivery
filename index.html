@@ -1,8 +1,8 @@
+
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
   <meta charset="UTF-8">
-  <!-- قفل ميزة التكبير والتصغير لمنح تجربة تطبيق متكاملة للهواتف -->
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <meta name="theme-color" content="#4f46e5" />
   <title>نظام إدارة العمليات اللوجستية</title>
@@ -13,7 +13,7 @@
   <!-- مكتبة أنماط الخرائط Leaflet -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
   
-  <!-- مكتبة Toastify CSS لإشعارات الهواتف الداخلية الجذابة -->
+  <!-- مكتبة Toastify CSS لإشعارات الهواتف -->
   <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css">
   
   <!-- Tailwind CSS للواجهة -->
@@ -43,7 +43,7 @@
 </head>
 <body class="bg-slate-50 text-slate-800" x-data="logisticsApp()">
 
-  <!-- شاشة حجب التحميل لمنع الضغط المزدوج والعمليات المتكررة -->
+  <!-- شاشة حجب التحميل لمنع الضغط المزدوج -->
   <div x-show="loading" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-[99999]" x-cloak>
     <div class="bg-white px-6 py-4 rounded-2xl shadow-2xl flex items-center space-x-3 space-x-reverse border border-slate-100">
       <i class="fa-solid fa-spinner animate-spin text-2xl text-indigo-600"></i>
@@ -169,7 +169,7 @@
           <i class="fa-solid fa-truck-ramp-box w-5"></i><span>الطلب الحالي</span>
         </a>
         <a @click="switchTab('driver-delivered')" :class="activeTab === 'driver-delivered' ? 'bg-emerald-600 text-white' : 'hover:bg-slate-800 text-slate-400 hover:text-white'" class="flex items-center space-x-3 space-x-reverse px-4 py-3 rounded-xl cursor-pointer transition">
-          <i class="fa-solid fa-clipboard-check w-5"></i><span>عملياتي المسلّمة</span>
+          <i class="fa-solid fa-clipboard-check w-5"></i><span>العمليات المسلّمة</span>
         </a>
       </nav>
 
@@ -219,7 +219,7 @@
         <i class="fa-solid fa-truck-ramp-box text-lg"></i>
         <span class="text-[10px]">الطلب الحالي</span>
       </button>
-      <button @click="driver-delivered" :class="activeTab === 'driver-delivered' ? 'text-emerald-600 font-bold' : 'text-slate-400'" class="flex flex-col items-center space-y-0.5 w-24">
+      <button @click="switchTab('driver-delivered')" :class="activeTab === 'driver-delivered' ? 'text-emerald-600 font-bold' : 'text-slate-400'" class="flex flex-col items-center space-y-0.5 w-24">
         <i class="fa-solid fa-clipboard-check text-lg"></i>
         <span class="text-[10px]">المسلّمة</span>
       </button>
@@ -283,6 +283,14 @@
                     <a :href="formatPhoneForWhatsApp(order.CustomerPhone)" target="_blank" class="px-2.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 text-xs rounded-lg font-bold flex items-center space-x-1.5 space-x-reverse">
                       <i class="fa-brands fa-whatsapp"></i><span>واتساب</span>
                     </a>
+                    <a :href="getMapLink(order.CustomerLat, order.CustomerLng)" target="_blank" class="px-2.5 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 text-xs rounded-lg font-bold flex items-center space-x-1.5 space-x-reverse">
+                      <i class="fa-solid fa-location-dot"></i><span>موقع العميل</span>
+                    </a>
+                    <template x-if="order.StoreLat && order.StoreLng">
+                      <a :href="getMapLink(order.StoreLat, order.StoreLng)" target="_blank" class="px-2.5 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-600 text-xs rounded-lg font-bold flex items-center space-x-1.5 space-x-reverse">
+                        <i class="fa-solid fa-store"></i><span>موقع المتجر</span>
+                      </a>
+                    </template>
                     <button @click="approveCancellation(order.OrderID, order.ReasonForFailure)" class="px-2.5 py-1.5 bg-rose-600 hover:bg-rose-700 text-white text-xs rounded-lg font-bold">
                       تأكيد الإلغاء
                     </button>
@@ -586,7 +594,7 @@
                     <td class="p-4 font-semibold text-indigo-600" x-text="order.OrderID"></td>
                     <td class="p-4">
                       <p class="font-semibold text-slate-900" x-text="order.CustomerName"></p>
-                      <div class="flex space-x-2 space-x-reverse mt-1">
+                      <div class="flex flex-wrap gap-2 mt-1">
                         <a :href="formatPhoneForCall(order.CustomerPhone)" class="text-blue-600 hover:underline text-xs flex items-center space-x-1 space-x-reverse">
                           <i class="fa-solid fa-phone"></i><span x-text="order.CustomerPhone"></span>
                         </a>
@@ -594,6 +602,16 @@
                         <a :href="formatPhoneForWhatsApp(order.CustomerPhone)" target="_blank" class="text-emerald-600 hover:underline text-xs flex items-center space-x-1 space-x-reverse">
                           <i class="fa-brands fa-whatsapp"></i><span>واتساب</span>
                         </a>
+                        <span class="text-slate-300">|</span>
+                        <a :href="getMapLink(order.CustomerLat, order.CustomerLng)" target="_blank" class="text-rose-600 hover:underline text-xs flex items-center space-x-1 space-x-reverse">
+                          <i class="fa-solid fa-location-dot"></i><span>العميل</span>
+                        </a>
+                        <template x-if="order.StoreLat && order.StoreLng">
+                          <span class="text-slate-300">|</span>
+                          <a :href="getMapLink(order.StoreLat, order.StoreLng)" target="_blank" class="text-amber-600 hover:underline text-xs flex items-center space-x-1 space-x-reverse">
+                            <i class="fa-solid fa-store"></i><span>المتجر</span>
+                          </a>
+                        </template>
                       </div>
                     </td>
                     <td class="p-4" x-text="getDriverName(order.AssignedDriverID)"></td>
@@ -700,19 +718,26 @@
                 <p class="text-slate-800 font-semibold" x-text="'الاسم: ' + currentDriverOrder.CustomerName"></p>
                 <p class="text-slate-800" x-text="'الجوال: ' + currentDriverOrder.CustomerPhone"></p>
                 
-                <div class="flex space-x-2 space-x-reverse pt-2">
-                  <a :href="formatPhoneForCall(currentDriverOrder.CustomerPhone)" class="px-4 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded-lg font-bold text-xs flex items-center space-x-1.5 space-x-reverse">
+                <div class="flex flex-wrap gap-2 pt-2">
+                  <a :href="formatPhoneForCall(currentDriverOrder.CustomerPhone)" class="px-3 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded-lg font-bold text-xs flex items-center space-x-1.5 space-x-reverse">
                     <i class="fa-solid fa-phone"></i><span>اتصال مباشر</span>
                   </a>
-                  <a :href="formatPhoneForWhatsApp(currentDriverOrder.CustomerPhone)" target="_blank" class="px-4 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 rounded-lg font-bold text-xs flex items-center space-x-1.5 space-x-reverse">
+                  <a :href="formatPhoneForWhatsApp(currentDriverOrder.CustomerPhone)" target="_blank" class="px-3 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 rounded-lg font-bold text-xs flex items-center space-x-1.5 space-x-reverse">
                     <i class="fa-brands fa-whatsapp text-sm"></i><span>ارسال واتساب</span>
                   </a>
                 </div>
 
-                <div class="pt-2">
-                  <a :href="'https://www.google.com/maps/search/?api=1&query=' + currentDriverOrder.CustomerLat + ',' + currentDriverOrder.CustomerLng" target="_blank" class="text-indigo-600 hover:underline font-bold text-xs flex items-center space-x-1.5 space-x-reverse">
-                    <i class="fa-solid fa-diamond-turn-right"></i><span>افتح التوجيه في خرائط جوجل الخارجية</span>
+                <div class="flex flex-wrap gap-2 pt-2">
+                  <!-- زر التوجه لموقع العميل -->
+                  <a :href="getMapLink(currentDriverOrder.CustomerLat, currentDriverOrder.CustomerLng)" target="_blank" class="px-3 py-2 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg font-bold text-xs flex items-center space-x-1.5 space-x-reverse">
+                    <i class="fa-solid fa-location-dot"></i><span>موقع العميل</span>
                   </a>
+                  <!-- زر التوجه لموقع المتجر -->
+                  <template x-if="currentDriverOrder.StoreLat && currentDriverOrder.StoreLng">
+                    <a :href="getMapLink(currentDriverOrder.StoreLat, currentDriverOrder.StoreLng)" target="_blank" class="px-3 py-2 bg-amber-50 hover:bg-amber-100 text-amber-600 rounded-lg font-bold text-xs flex items-center space-x-1.5 space-x-reverse">
+                      <i class="fa-solid fa-store"></i><span>موقع المتجر</span>
+                    </a>
+                  </template>
                 </div>
               </div>
 
@@ -720,7 +745,7 @@
                 <p class="text-slate-500 font-bold">المتطلبات المالية والتوصيل:</p>
                 <p class="text-slate-800" x-text="'رسوم التوصيل: ' + currentDriverOrder.DeliveryFee + ' ر.س'"></p>
                 <p class="text-emerald-600 font-bold" x-text="'مكسبك المتوقع: ' + calculateDriverPayout(currentDriverOrder.DeliveryFee) + ' ر.س'"></p>
-                <p class="text-rose-600 font-bold" x-text="currentDriverOrder.PaymentStatus === 'COD' ? 'مطلوب تحصيل مالي: ' + currentDriverOrder.CODAmount + ' ر.س' : 'الطلب مدفوع إلكترونياً'"></p>
+                <p class="text-rose-600 font-bold" x-text="currentDriverOrder.PaymentStatus === 'COD' ? 'مطلب تحصيل مالي: ' + currentDriverOrder.CODAmount + ' ر.س' : 'الطلب مدفوع إلكترونياً'"></p>
               </div>
             </div>
 
@@ -867,7 +892,7 @@
     // ==========================================
     // تهيئة المتغيرات الأساسية وعناوين الخوادم
     // ==========================================
-    const GAS_API_URL = "https://script.google.com/macros/s/AKfycbwML3p8wzvj_zEV_-WEyeA5fb1dUJWPbolM56OmXSUeCtlTFCmhbl6x7VP6ZwN__3Fd_Q/exec"; // استبدله برابط النشر الخاص بـ Google Apps Script
+    const GAS_API_URL = "https://script.google.com/macros/s/AKfycbzzNIyOrohLWQg7gBjk8HscMsuvqQPe7M6J82QweWDxv6dBakYbUxnPELbVOafzKvaEpw/exec"; // استبدله برابط النشر الخاص بـ Google Apps Script
 
     function logisticsApp() {
       return {
@@ -927,7 +952,6 @@
             }
           }
           
-          // التحقق من صلاحية التنبيهات وإظهار البنر في حال عدم تفعيلها بعد
           this.checkNotificationStatus();
 
           // التحديث التلقائي الفوري الصامت كل 12 ثانية بدون تجميد الصفحة
@@ -1029,47 +1053,43 @@
           audio.play().catch(() => console.log('تعذر تشغيل الصوت تلقائياً بسبب سياسة الأمان بالمتصفح'));
         },
 
-        // جلب البيانات الشامل ومراقبة التحديثات
+        // جلب البيانات الشامل بشكل موحد ولحظي (طلب خادم واحد مدمج وسريع لتجنب التأخير)
         async fetchData(silent = false) {
           if (!this.isLoggedIn) return;
           if (!silent) this.loading = true;
           
           try {
-            const ordersRes = await this.apiCall({ action: 'getOrders' });
-            if (ordersRes.success) {
-              if (silent && this.orders.length > 0 && ordersRes.orders.length > this.orders.length) {
-                const diff = ordersRes.orders.length - this.orders.length;
+            const res = await this.apiCall({ action: 'getAllData' });
+            if (res.success) {
+              // مراقبة ورود شحنات جديدة
+              if (silent && this.orders.length > 0 && res.orders.length > this.orders.length) {
+                const diff = res.orders.length - this.orders.length;
                 this.showToast(`ورد ${diff} طلب نقل جديد في المنصة!`, 'info');
                 this.playNotificationSound();
               }
               
+              // مراقبة طلبات تعذر التسليم
               if (silent && this.userRole === 'Manager') {
                 const oldPendingCount = this.getPendingCancellationOrders().length;
-                const newPending = ordersRes.orders.filter(o => o.Status === 'Pending Cancellation');
+                const newPending = res.orders.filter(o => o.Status === 'Pending Cancellation');
                 if (newPending.length > oldPendingCount) {
                   this.showToast("تنبيه: يوجد طلب تعذر تسليم جديد يتطلب موافقة الإدارة!", "error");
                   this.playNotificationSound();
                 }
               }
 
-              this.orders = ordersRes.orders;
+              // تحديث حالة التطبيق في خطوة واحدة
+              this.orders = res.orders;
+              this.drivers = res.drivers;
+              this.stats = res.stats;
+              this.settings.commission = res.commission;
+
+              if (this.userRole === 'Driver') {
+                this.currentDriverOrder = this.orders.find(o => o.AssignedDriverID.toString() === this.driverId.toString() && o.Status === 'In Transit') || null;
+              }
+
+              this.updateMaps();
             }
-
-            const driversRes = await this.apiCall({ action: 'getDrivers' });
-            if (driversRes.success) this.drivers = driversRes.drivers;
-
-            const statsRes = await this.apiCall({ action: 'getDashboardStats' });
-            if (statsRes.success) this.stats = statsRes.stats;
-
-            const settingsRes = await this.apiCall({ action: 'getSettings' });
-            if (settingsRes.success) this.settings.commission = settingsRes.commission;
-
-            if (this.userRole === 'Driver') {
-              this.currentDriverOrder = this.orders.find(o => o.AssignedDriverID.toString() === this.driverId.toString() && o.Status === 'In Transit') || null;
-            }
-
-            this.updateMaps();
-
           } catch (e) {
             console.error("خطأ في تحديث البيانات تلقائياً: ", e);
           } finally {
@@ -1179,7 +1199,6 @@
 
           const bounds = [];
 
-          // تهيئة المؤشرات بأبعاد ثابتة لـ Leaflet لمنع تشتتها عند التكبير والتصغير
           const driverIcon = L.divIcon({
             html: `<div class="bg-indigo-600 text-white rounded-full border-2 border-white shadow-lg flex items-center justify-center w-[32px] h-[32px]"><i class="fa-solid fa-motorcycle text-xs"></i></div>`,
             className: 'custom-div-icon',
@@ -1219,15 +1238,24 @@
               bounds.push(pos);
 
               const marker = L.marker(pos, { icon: customerIcon }).addTo(this.managerMap);
+              
+              // بناء خيارات الروابط لخرائط جوجل ومواقع العملاء والمتاجر ضمن نوافذ الخريطة للمدير
+              let storeBtnHtml = '';
+              if (o.StoreLat && o.StoreLng) {
+                storeBtnHtml = `<a href="${this.getMapLink(o.StoreLat, o.StoreLng)}" target="_blank" style="padding:4px 8px; background:#fef3c7; color:#d97706; text-decoration:none; border-radius:4px; font-size:10px; font-weight:bold;"><i class="fa-solid fa-store"></i> المتجر</a>`;
+              }
+
               marker.bindPopup(`
-                <div style="text-align:right; font-family:'Cairo'; min-width: 150px;">
+                <div style="text-align:right; font-family:'Cairo'; min-width: 170px;">
                   <h4 style="font-weight:bold; margin-bottom:4px; color:#e11d48;">العميل: ${o.CustomerName}</h4>
                   <p style="font-size:11px; margin:0 0 5px 0;">رقم الشحنة: ${o.OrderID}</p>
                   <p style="font-size:11px; margin:0 0 5px 0;">الحالة: ${this.formatStatus(o.Status)}</p>
                   <p style="font-size:11px; margin:0 0 8px 0;">الرسوم: ${o.DeliveryFee} ر.س</p>
-                  <div style="display:flex; gap:5px; border-t: 1px solid #f1f5f9; padding-top:6px;">
+                  <div style="display:flex; flex-wrap:wrap; gap:5px; border-top: 1px solid #f1f5f9; padding-top:6px;">
                     <a href="${this.formatPhoneForCall(o.CustomerPhone)}" style="padding:4px 8px; background:#eff6ff; color:#2563eb; text-decoration:none; border-radius:4px; font-size:10px; font-weight:bold;"><i class="fa-solid fa-phone"></i> اتصال</a>
                     <a href="${this.formatPhoneForWhatsApp(o.CustomerPhone)}" target="_blank" style="padding:4px 8px; background:#ecfdf5; color:#059669; text-decoration:none; border-radius:4px; font-size:10px; font-weight:bold;"><i class="fa-brands fa-whatsapp"></i> واتساب</a>
+                    <a href="${this.getMapLink(o.CustomerLat, o.CustomerLng)}" target="_blank" style="padding:4px 8px; background:#fdf2f8; color:#db2777; text-decoration:none; border-radius:4px; font-size:10px; font-weight:bold;"><i class="fa-solid fa-location-dot"></i> العميل</a>
+                    ${storeBtnHtml}
                   </div>
                 </div>
               `);
@@ -1262,6 +1290,12 @@
               { enableHighAccuracy: true, timeout: 15000, maximumAge: 10000 }
             );
           }
+        },
+
+        // دالة مساعدة لتوليد روابط خرائط جوجل مباشرة وموثوقة
+        getMapLink(lat, lng) {
+          if (!lat || !lng) return '#';
+          return `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
         },
 
         // التصفية والتحقق من طلبات إلغاء تعذر التسليم (للمدير)
